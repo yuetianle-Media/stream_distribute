@@ -1,0 +1,25 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ImportGroup Label="PropertySheets" />
+  <PropertyGroup Label="UserMacros">
+    <sdk_root>$(Registry:HKEY_LOCAL_MACHINE\Software\vistek\dev@sdk_root)</sdk_root>
+    <BoostHome>$(sdk_root)\boost_1_58_0\</BoostHome>
+    <BoostLib>$(BoostHome)stage\$(PlatformToolset)\$(Platform)\lib\</BoostLib>
+  </PropertyGroup>
+  <PropertyGroup>
+    <IncludePath>$(BoostHome);$(IncludePath)</IncludePath>
+    <LibraryPath>$(BoostLib);$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
+  <ItemDefinitionGroup />
+  <ItemGroup>
+    <BuildMacro Include="sdk_root">
+      <Value>$(sdk_root)</Value>
+    </BuildMacro>
+    <BuildMacro Include="BoostHome">
+      <Value>$(BoostHome)</Value>
+    </BuildMacro>
+    <BuildMacro Include="BoostLib">
+      <Value>$(BoostLib)</Value>
+    </BuildMacro>
+  </ItemGroup>
+</Project>
