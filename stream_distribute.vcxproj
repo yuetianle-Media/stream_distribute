@@ -162,7 +162,6 @@
     <ClCompile Include="src\rule_manager.cpp" />
     <ClCompile Include="src\socket_session.cpp" />
     <ClCompile Include="src\stream_buffer.cpp" />
-    <ClCompile Include="src\test.cpp" />
     <ClCompile Include="stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
