@@ -3,7 +3,7 @@
   <ImportGroup Label="PropertySheets" />
   <PropertyGroup Label="UserMacros">
     <sdk_root>$(Registry:HKEY_LOCAL_MACHINE\Software\vistek\dev@sdk_root)</sdk_root>
-    <BoostHome>$(sdk_root)\boost_1_58_0\</BoostHome>
+    <BoostHome>$(sdk_root)boost_1_61_0\</BoostHome>
     <BoostLib>$(BoostHome)stage\$(PlatformToolset)\$(Platform)\lib\</BoostLib>
   </PropertyGroup>
   <PropertyGroup>

@@ -1,6 +1,4 @@
 #pragma once
-#include <iostream>
-#include <memory>
 #include <boost/asio.hpp>
 #include <boost/bind.hpp>
 #include <boost/asio/steady_timer.hpp>
@@ -14,6 +12,8 @@
 #include <boost/make_shared.hpp>
 #include <boost/thread.hpp>
 #include <boost/thread/mutex.hpp>
+
+#include "pre_std_basic.h"
 
 #include "errcode.h"
 using namespace std;
@@ -43,7 +43,8 @@ class SocketSession: public std::enable_shared_from_this<SocketSession>
 		virtual int connect_ex(const string &content);
 		bool set_no_delay(bool value);
 	protected:
-		typedef boost::function<void(const coro_promise_ptr &prom, const coro_timer_ptr &timer, boost::asio::yield_context)> coro_action;
+		//typedef boost::function<void(const coro_promise_ptr &prom, const coro_timer_ptr &timer, boost::asio::yield_context)> coro_action;
+		typedef function<void(const coro_promise_ptr &prom, const coro_timer_ptr &timer, boost::asio::yield_context)> coro_action;
 		int _run_sync_action(coro_action operation_action, const int &time_out);
         std::shared_ptr<boost::asio::io_service> io_svt_ptr_;
         //boost::shared_ptr<boost::asio::io_service> io_svt_ptr_;

@@ -111,7 +111,7 @@ int SocketSession::connect_ex(const string & content)
 bool SocketSession::set_no_delay(bool value)
 {
 	boost::system::error_code ec;
-	socket_.set_option(boost::asio::ip::tcp::no_delay(val), ec);
+	socket_.set_option(boost::asio::ip::tcp::no_delay(value), ec);
 	if (!ec)
 	{
 		//cout << "Set Socket No Delay To " << val << " OK" << endl;
@@ -122,11 +122,11 @@ bool SocketSession::set_no_delay(bool value)
 
 int SocketSession::_run_sync_action(coro_action operation_action, const int & time_out)
 {
-	coro_promise_ptr prom = make_shared<coro_promise>();
+	auto prom = make_shared<coro_promise>();
 	coro_timer_ptr timer(new coro_timer(*io_svt_ptr_));
 	boost::system::error_code ec;
 	auto self = shared_from_this();
-	timer->expires_from_now(boost::chrono::milliseconds(time_out), ec);
+	timer->expires_from_now(std::chrono::milliseconds(time_out), ec);
 	boost::asio::spawn(strand_, [this, self, prom, timer](boost::asio::yield_context yield) 
 	{
 		boost::system::error_code ec;
@@ -135,7 +135,7 @@ int SocketSession::_run_sync_action(coro_action operation_action, const int & ti
 		{
 			return;
 		}
-		else if (timer->expires_from_now() <= boost::chrono::milliseconds(0))
+		else if (timer->expires_from_now() <= std::chrono::milliseconds(0))
 		{
 			try 
 			{
