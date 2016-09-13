@@ -6,5 +6,5 @@
 // 将 _WIN32_WINNT 宏设置为要支持的平台，然后再包括 SDKDDKVer.h。
 
 #ifdef win32
-#endif // Win32
 #include <SDKDDKVer.h>
+#endif // Win32

@@ -7,10 +7,10 @@
 
 #include "targetver.h"
 
-#include <stdio.h>
 #ifdef win32
-#endif // Win32
 #include <tchar.h>
+#include <stdio.h>
+#endif // Win32
 
 
 
