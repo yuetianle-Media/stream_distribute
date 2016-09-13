@@ -6,7 +6,7 @@
 #pragma once
 
 #include "targetver.h"
-
+#pragma warning(disable : 4496)
 #ifdef win32
 #include <tchar.h>
 #include <stdio.h>

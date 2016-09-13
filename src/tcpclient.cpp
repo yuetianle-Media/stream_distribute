@@ -1,7 +1,9 @@
 
+#include "stdafx.h"
 #include "tcpclient.h"
 
 TCPClient::TCPClient(const string &remote_server, const int &port, const int &time_out/*s*/)
+	:SocketSession(remote_server, port, time_out)
 {
 
 }
@@ -27,13 +29,13 @@ int TCPClient::send(const char *content, const int &length)
 	{
 		cout << "send size:" << length << std::endl;
 	}
-
+	return 0;
 }
 
 
 int TCPClient::receive()
 {
-
+	return 0;
 }
 
 int TCPClient::async_send(const char *content, const int &length)
@@ -43,7 +45,7 @@ int TCPClient::async_send(const char *content, const int &length)
 	{
 		timer_ptr_->expires_from_now(std::chrono::milliseconds(timeout_), ec);
 	}
-	boost::asio::async_write(socket_, boost::asio::buffer(content, length), yield[ec]);
+	//boost::asio::async_write(socket_, boost::asio::buffer(content, length));
 	if (ec)
 	{
 		_close();
@@ -52,7 +54,7 @@ int TCPClient::async_send(const char *content, const int &length)
 	{
 		cout << "send size:" << length << std::endl;
 	}
-
+	return 0;
 }
 
 int TCPClient::async_receive()
@@ -72,19 +74,19 @@ int TCPClient::wait_response()
 		[this, self](boost::asio::yield_context yield)
 	{
 		boost::system::error_code ec;
-		m_timer->expires_from_now(std::chrono::milliseconds(m_timeout_ms), ec);
+		timer_ptr_->expires_from_now(std::chrono::milliseconds(timeout_), ec);
 		boost::aligned_storage<0x8000> buff;
 		for (;;)
 		{
-			m_timer->expires_from_now(std::chrono::milliseconds(m_timeout_ms), ec);
-			size_t sz = m_socket.async_read_some(boost::asio::buffer((char*)buff.address(), buff.size), yield[ec]);
+			timer_ptr_->expires_from_now(std::chrono::milliseconds(timeout_), ec);
+			size_t sz = socket_.async_read_some(boost::asio::buffer((char*)buff.address(), buff.size), yield[ec]);
 			if (!ec)
 			{
 				if (sz > 0)
 				{
 					string req((char*)buff.address(), sz);
 					//将接收到的数据发送出去
-					//_handle_request(move(req), m_timer, yield);
+					//_handle_request(move(timer_ptr_, yield);
 				}
 			}
 			else
@@ -95,7 +97,8 @@ int TCPClient::wait_response()
 		}
 
 	});
-	_spawn_handle_timeout(m_timer, nullptr);
+	_spawn_handle_timeout(timer_ptr_, nullptr);
+	return 0;
 }
 
 int TCPClient::_send(const char * content, const int & length, boost::asio::yield_context yield)
@@ -105,7 +108,7 @@ int TCPClient::_send(const char * content, const int & length, boost::asio::yiel
 	{
 		timer_ptr_->expires_from_now(std::chrono::milliseconds(timeout_), ec);
 	}
-	boost::asio::write(socket_, boost::asio::buffer(content, length), yield[ec]);
+	boost::asio::async_write(socket_, boost::asio::buffer(content, length), yield[ec]);
 	if (ec)
 	{
 		_close();
@@ -117,16 +120,16 @@ int TCPClient::_send(const char * content, const int & length, boost::asio::yiel
 	return 0;
 }
 
-int TCPClient::_receive(const int & size)
+int TCPClient::_receive(const int & size, boost::asio::yield_context yield)
 {
 	if (0 < size)
 	{
-		auto fz = make_shared<int64_t>(file_size);
+		auto fz = std::make_shared<int64_t>(size);
 		boost::system::error_code ec;
 		boost::aligned_storage<0x8000> buff;
 		while (*fz > 0)
 		{
-			ec = socket_.async_read_some(boost::asio::buffer(buff.address(), buff.size), yield[ec]);
+			int read_size = socket_.async_read_some(boost::asio::buffer(buff.address(), buff.size), yield[ec]);
 			if (!ec)
 			{
 				if (timer_ptr_)

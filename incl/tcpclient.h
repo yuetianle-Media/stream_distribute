@@ -2,7 +2,7 @@
 
 
 using namespace boost;
-typedef boost::signals2::signal<void(char* data, const &data_len)> DataReceiveSignal;
+typedef boost::signals2::signal<void(char* data, const int& data_len)> DataReceiveSignal;
 class TCPClient: public SocketSession
 {
 public:
@@ -16,6 +16,8 @@ public:
 	virtual int wait_response();
 private:
 	int _send(const char *content, const int &length, boost::asio::yield_context yield);
-	int _receive(const int &size);
+	int _receive(const int &size, boost::asio::yield_context yield);
 
 };
+
+typedef std::shared_ptr<TCPClient> TCPClientPtr;
