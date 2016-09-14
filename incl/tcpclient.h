@@ -14,9 +14,14 @@ public:
 	virtual int async_receive()override;
 
 	virtual int wait_response();
+    boost::signals2::connection subcribe_data_callback(const DataReceiveSignal::slot_type &slot);
+    void unsubcribe_data_callback(boost::signals2::connection subcriber);
 private:
 	int _send(const char *content, const int &length, boost::asio::yield_context yield);
+
 	int _receive(const int &size, boost::asio::yield_context yield);
+
+    DataReceiveSignal data_send_signal_;
 
 };
 

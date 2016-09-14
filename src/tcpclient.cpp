@@ -85,8 +85,7 @@ int TCPClient::wait_response()
 				if (sz > 0)
 				{
 					string req((char*)buff.address(), sz);
-					//将接收到的数据发送出去
-					//_handle_request(move(timer_ptr_, yield);
+                    data_send_signal_((char*)buff.address(), sz);
 				}
 			}
 			else
@@ -147,5 +146,14 @@ int TCPClient::_receive(const int & size, boost::asio::yield_context yield)
 		}
 	}
 	return 0;
+}
+
+void TCPClient::unsubcribe_data_callback(boost::signals2::connection subcriber)
+{
+    subcriber.disconnect();
+}
+boost::signals2::connection TCPClient::subcribe_data_callback(const DataReceiveSignal::slot_type &slot)
+{
+	return data_send_signal_.connect(slot);
 }
 

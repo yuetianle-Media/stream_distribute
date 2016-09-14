@@ -1,10 +1,4 @@
 #pragma once
-#include <boost/asio/steady_timer.hpp>
-#include <boost/asio/use_future.hpp>
-#include <boost/coroutine/coroutine.hpp>
-#include <boost/asio/spawn.hpp>
-#include <boost/thread.hpp>
-#include <boost/thread/mutex.hpp>
 
 #include "pre_std_basic.h"
 #include "pre_boost_basic.h"
