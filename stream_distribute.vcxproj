@@ -75,12 +75,16 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
+    <OutDir>$(SolutionDir)..\__output</OutDir>
+    <IntDir>$(SolutionDir)..\__obj</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(SolutionDir)..\__output</OutDir>
+    <IntDir>$(SolutionDir)..\__obj</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
@@ -92,7 +96,7 @@
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>false</SDLCheck>
-      <AdditionalIncludeDirectories>.\incl;.;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.\incl;.;.\test;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
     </ClCompile>
     <Link>
@@ -155,20 +159,31 @@
     <ClInclude Include="incl\errcode.h" />
     <ClInclude Include="incl\pre_boost_basic.h" />
     <ClInclude Include="incl\pre_std_basic.h" />
+    <ClInclude Include="incl\pugiconfig.hpp" />
+    <ClInclude Include="incl\pugixml.hpp" />
     <ClInclude Include="incl\rule_manager.h" />
     <ClInclude Include="incl\socket_session.h" />
     <ClInclude Include="incl\stream_buffer.h" />
     <ClInclude Include="incl\stream_receiver.h" />
+    <ClInclude Include="incl\stream_sender.h" />
     <ClInclude Include="incl\tcpclient.h" />
+    <ClInclude Include="incl\udpclient.h" />
+    <ClInclude Include="incl\udp_socket_session.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="src\pugixml.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="src\rule_manager.cpp" />
     <ClCompile Include="src\socket_session.cpp" />
     <ClCompile Include="src\stream_buffer.cpp" />
     <ClCompile Include="src\stream_receiver.cpp" />
+    <ClCompile Include="src\stream_sender.cpp" />
     <ClCompile Include="src\tcpclient.cpp" />
+    <ClCompile Include="src\udpclient.cpp" />
+    <ClCompile Include="src\udp_socket_session.cpp" />
     <ClCompile Include="stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
@@ -176,6 +191,9 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="stream_distribute.cpp" />
+    <ClCompile Include="test\test_rule_manager.cpp" />
+    <ClCompile Include="test\test_rule_manager.h" />
+    <ClCompile Include="test\test_stream_receiver.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

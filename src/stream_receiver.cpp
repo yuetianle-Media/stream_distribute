@@ -117,8 +117,8 @@ int StreamReceiver::_do_ts_task()
 		TSCMD ts_cmd_struct;
 		while (ts_task_list_.pop(ts_cmd_struct))
 		{
-			//string ts_cmd = ts_cmd_struct.cmd;
-			string ts_cmd;
+			string ts_cmd = ts_cmd_struct.cmd;
+			//string ts_cmd;
             if (0 < ts_cmd.length())
                 _send_ts_cmd(ts_cmd);
 		}

@@ -12,6 +12,9 @@
 #include <stdio.h>
 #endif // Win32
 
+#ifdef WIN32
+#define _ENABLE_ATOMIC_ALIGNMENT_FIX 
+#endif // WIN32
 
 
 // TODO:  在此处引用程序需要的其他头文件

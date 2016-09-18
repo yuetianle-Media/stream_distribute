@@ -5,9 +5,6 @@
  */
 
 #pragma once
-#ifdef WIN32
-#define _ENABLE_ATOMIC_ALIGNMENT_FIX 
-#endif // WIN32
 
 #include "tcpclient.h"
 #include <boost/lockfree/queue.hpp>
