@@ -6,8 +6,10 @@
 
 #pragma once
 
-#include "tcpclient.h"
 #include <boost/lockfree/queue.hpp>
+#include <boost/filesystem.hpp>
+#include "tcpclient.h"
+#include "uri_parser.h"
 
 //using namespace std;
 
@@ -45,7 +47,7 @@ public:
     boost::signals2::connection subcribe_ts_callback(const TsSignal::slot_type &slot);
 private:
 	TCPClientPtr m3u8_tcp_client_ptr_;
-	TCPClientPtr ts_tcp_client_ptr;
+	TCPClientPtr ts_tcp_client_ptr_;
 
 	std::string _make_m3u8_cmd(const std::string &stream_url="");
 	std::string _make_down_ts_cmd(const std::string &ts_file);
@@ -76,6 +78,8 @@ private:
     //boost::shared_ptr<boost::thread> ts_thrd_ptr_;
     std::shared_ptr<std::thread> m3u8_thrd_ptr_;
     std::shared_ptr<std::thread> ts_thrd_ptr_;
+
+	URIParser uri_parser_;
 
     bool b_exit;/* << exit the thread.*/
 };

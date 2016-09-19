@@ -9,7 +9,7 @@ using namespace std;
 class SocketSession: public std::enable_shared_from_this<SocketSession>
 {
     public:
-        SocketSession(const string &remote_server, const int &port, const int &time_out/*s*/);
+        SocketSession(const string &remote_server, const int &port, const int &time_out/*ms*/);
         ~SocketSession();
 
 		typedef std::promise<int> coro_promise;
@@ -38,7 +38,7 @@ class SocketSession: public std::enable_shared_from_this<SocketSession>
         //boost::shared_ptr<boost::asio::io_service> io_svt_ptr_;
         std::shared_ptr<boost::asio::io_service::work> work_ptr_;
         //boost::shared_ptr<boost::asio::io_service::work> work_ptr_;
-        boost::asio::strand strand_;
+        boost::asio::io_service::strand strand_;
 
         boost::asio::ip::tcp::endpoint remote_addr_;
         boost::asio::ip::tcp::socket socket_;

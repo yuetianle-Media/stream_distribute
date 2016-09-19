@@ -1,5 +1,6 @@
 #pragma once
 #include "socket_session.h"
+#include <stdexcept>
 
 
 using namespace boost;

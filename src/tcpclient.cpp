@@ -35,6 +35,14 @@ int TCPClient::send(const char *content, const int &length)
 
 int TCPClient::receive()
 {
+	boost::aligned_storage<0x8000> buff;
+	boost::system::error_code ec;
+	size_t sz = socket_.read_some(boost::asio::buffer((char*)buff.address(), buff.size), ec);
+	while (!ec)
+	{
+		std::string tmp((char*)buff.address(), sz);
+		std::cout << tmp << std::endl;
+	}
 	return 0;
 }
 
@@ -45,6 +53,28 @@ int TCPClient::async_send(const char *content, const int &length)
 	{
 		timer_ptr_->expires_from_now(std::chrono::milliseconds(timeout_), ec);
 	}
+	auto self = shared_from_this();
+	int result = _run_sync_action([this, self, content, length](const coro_promise_ptr &porm\
+		, const coro_timer_ptr &ptimer, boost::asio::yield_context yield)
+	{
+
+		try
+		{
+			boost::system::error_code ec;
+			_send(content, length, yield[ec]);
+		}
+		catch (std::exception &e)
+		{
+			std::cout << e.what() << endl;
+
+		}
+		catch (std::error_code &e)
+		{
+			std::cout << e.value() << endl;
+		}
+	},timeout_);
+	//_run_sync_action([]()
+	//{}, timeout_);
 	//boost::asio::async_write(socket_, boost::asio::buffer(content, length));
 	if (ec)
 	{
@@ -74,6 +104,7 @@ int TCPClient::wait_response()
 		[this, self](boost::asio::yield_context yield)
 	{
 		boost::system::error_code ec;
+		if (timer_ptr_)
 		timer_ptr_->expires_from_now(std::chrono::milliseconds(timeout_), ec);
 		boost::aligned_storage<0x8000> buff;
 		for (;;)
@@ -85,12 +116,22 @@ int TCPClient::wait_response()
 				if (sz > 0)
 				{
 					string req((char*)buff.address(), sz);
+					fstream out_file("a.out");
+					out_file.open("a.out", ios::out | ios::binary | ios::app);
+					out_file.write(req.data(), req.length());
+					out_file.close();
+					std::cout << "receive data:" << req << std::endl;
                     data_send_signal_((char*)buff.address(), sz);
+				}
+				else
+				{
+					std::cout << "no data receive" << std::endl;
 				}
 			}
 			else
 			{
-				_close();
+				std::cout << "err:" << ec.value() << "mesg:" << ec.message() << std::endl;
+				//_close();
 				break;
 			}
 		}
@@ -112,10 +153,10 @@ int TCPClient::_send(const char * content, const int & length, boost::asio::yiel
 	{
 		_close();
 	}
-	else
+	/*else
 	{
 		cout << "send size:" << length << std::endl;
-	}
+	}*/
 	return 0;
 }
 

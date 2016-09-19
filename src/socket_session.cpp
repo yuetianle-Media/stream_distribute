@@ -4,13 +4,24 @@ SocketSession::SocketSession(const string &remote_server, const int &port, const
     : io_svt_ptr_(make_shared<boost::asio::io_service>())\
 	, remote_addr_(boost::asio::ip::address::from_string(remote_server), port)\
 	, socket_(*io_svt_ptr_)\
-	, strand_(socket_.get_io_service())\
-	, timeout_(time_out)
-	, timer_ptr_(0)
+	//, strand_(socket_.get_io_service())
+	, strand_(*io_svt_ptr_)\
+	, timeout_(time_out)\
+	, timer_ptr_(new boost::asio::steady_timer(socket_.get_io_service()))
 {
 	//timer_ptr_.reset();
 	//work_ptr_ = boost::make_shared<boost::asio::io_service::work>(boost::ref(*io_svt_ptr_));
 	work_ptr_ = make_shared<boost::asio::io_service::work>(*io_svt_ptr_);
+	auto svc = io_svt_ptr_;
+	thread thrd([svc]() 
+	{
+		boost::system::error_code ec;
+		svc->run(ec);
+#ifdef _DEBUG
+		std::cout << "service terminated." << std::endl;
+#endif // _DEBUG
+	});
+	thrd.detach();
 
 }
 
@@ -169,16 +180,19 @@ void SocketSession::_spawn_handle_timeout(const coro_timer_ptr & ptimer, const c
 		while (socket_.is_open())
 		{
 			boost::system::error_code ec;
-			ptimer->async_wait(yield[ec]);
-			
-			if (ptimer->expires_from_now() <= chrono::milliseconds(0))
+			if (nullptr != ptimer)
 			{
-				socket_.close(ec);
-				if (prom != nullptr)
+				ptimer->async_wait(yield[ec]);
+				
+				if (ptimer->expires_from_now() <= chrono::milliseconds(0))
 				{
-					if (prom->get_future().valid())
+					//socket_.close(ec);
+					if (prom != nullptr)
 					{
-						prom->set_value(E_CONN_TIMEOUT);
+						if (prom->get_future().valid())
+						{
+							prom->set_value(E_CONN_TIMEOUT);
+						}
 					}
 				}
 			}
