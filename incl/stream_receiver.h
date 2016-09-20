@@ -33,6 +33,19 @@ struct TSCMD
 typedef boost::signals2::signal<void(char *, const int&)> M3u8Signal;
 typedef boost::signals2::signal<void(char *, const int&)> TsSignal;
 
+typedef struct M3U8Struct
+{
+	int version;
+	int current_seq;
+	double max_duration;
+	std::map<std::string, double > ts_file_list;/*<< file_name:time*/
+	M3U8Struct()
+		:version(3), current_seq(0), max_duration(0)
+	{
+
+	}
+}M3U8Data;
+
 class StreamReceiver
 {
 public:
@@ -56,6 +69,12 @@ private:
 	int _send_m3u8_cmd(const std::string &m3u8_cmd);
 	int _send_ts_cmd(const std::string &ts_cmd);
 
+	//int _parser_m3u8_file(const char *m3u8_data, const int &length);
+	M3U8Data _parser_m3u8_file(const char *m3u8_data, const int &length);
+
+	int _push_ts_cmd(const string &ts_cmd);
+	bool _get_ts_cmd(TSCMD &cmd);
+
 	void m3u8Callback(char *data, const int &data_len);
 	void tsCallback(char *data, const int &data_len);
 
@@ -71,8 +90,9 @@ private:
     int play_stream_duration_;/*<< duration to send http cmd*/
 
     vector<std::string> ts_file_list_;
+	std::map<std::string, int> ts_all_task_map_;/*<< task_uri, task_index*/
     //boost::lockfree::queue<std::string> ts_task_list_;
-    boost::lockfree::queue<TSCMD, boost::lockfree::fixed_sized<false>> ts_task_list_;
+    boost::lockfree::queue<TSCMD, boost::lockfree::fixed_sized<true>> ts_task_list_;
 
 	//boost::shared_ptr<boost::thread> m3u8_thrd_ptr_;
     //boost::shared_ptr<boost::thread> ts_thrd_ptr_;
@@ -81,7 +101,9 @@ private:
 
 	URIParser uri_parser_;
 
+	int ts_file_index_;
     bool b_exit;/* << exit the thread.*/
+	std::string http_packet;/*<< one http packet*/
 };
 
 typedef std::shared_ptr<StreamReceiver> StreamReceiverPtr;

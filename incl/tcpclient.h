@@ -2,8 +2,9 @@
 #include "socket_session.h"
 #include <stdexcept>
 
-
 using namespace boost;
+const string HTTP_HEAD_END = "\r\n\r\n";
+const string HTTP_CONTENT_LENGTH = "Content-Length";
 typedef boost::signals2::signal<void(char* data, const int& data_len)> DataReceiveSignal;
 class TCPClient: public SocketSession
 {

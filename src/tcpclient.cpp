@@ -109,19 +109,14 @@ int TCPClient::wait_response()
 		boost::aligned_storage<0x8000> buff;
 		for (;;)
 		{
-			timer_ptr_->expires_from_now(std::chrono::milliseconds(timeout_), ec);
 			size_t sz = socket_.async_read_some(boost::asio::buffer((char*)buff.address(), buff.size), yield[ec]);
 			if (!ec)
 			{
 				if (sz > 0)
 				{
 					string req((char*)buff.address(), sz);
-					fstream out_file("a.out");
-					out_file.open("a.out", ios::out | ios::binary | ios::app);
-					out_file.write(req.data(), req.length());
-					out_file.close();
 					std::cout << "receive data:" << req << std::endl;
-                    data_send_signal_((char*)buff.address(), sz);
+					data_send_signal_((char*)req.c_str(), sz);
 				}
 				else
 				{
