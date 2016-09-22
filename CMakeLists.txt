@@ -47,7 +47,7 @@ set (BOOST_ROOT "/usr/local/include/boost/")
 #set (Boost_USE_MULTITHREADED ON)
 #set (Boost_USE_STATIC_RUNTIME OFF)
 
-find_package (Boost 1.61.0 REQUIRED COMPONENTS filesystem system regex date_time coroutine)
+find_package (Boost 1.61.0 REQUIRED COMPONENTS filesystem system regex date_time coroutine thread)
 if (NOT Boost_FOUND)
     message("not found boost")
 endif()

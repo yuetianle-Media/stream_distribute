@@ -17,6 +17,6 @@ const std::string M3U8_EXT_X_CUE_OUT ="#EXT-X-CUE_OUT-CONT";
 const std::string M3U8_EXT_X_SCTE35 ="#EXT-X-SCTE35";
 const std::string M3U8_EXT_X_CUE_START ="#EXT-X-CUE-OUT";
 const std::string M3U8_EXT_X_CUE_END ="#EXT-X-CUE-IN";
-const std::string M3U8_EXTINF = "#EXTIFN";
+const std::string M3U8_EXTINF = "#EXTINF";
 const std::string M3U8_EXT_I_FRAME_ONLY = "#EXT-X-I-FRAMES-ONLY";
 const std::string M3U8_EXT_IS_INDEPENDENT_SEGMENTS = "#EXT-X-INDEPENDENT-SEGMENTS";

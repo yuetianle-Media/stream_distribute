@@ -3,7 +3,7 @@
 
 
 URIParser::URIParser(const string &uri)
-	:port_(-1), is_ready_(false)
+	:port_(-1), is_ready_(false), uri_(uri)
 {
 	if (regex_finder_.find(uri, "(.+?)://(.+?)/(.+)"))
 	{

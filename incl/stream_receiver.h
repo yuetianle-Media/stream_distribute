@@ -10,7 +10,10 @@
 #include <boost/filesystem.hpp>
 #include "tcpclient.h"
 #include "uri_parser.h"
+#include "m3u8Parser.h"
+#include "pugixml.hpp"
 
+using namespace pugi;
 //using namespace std;
 
 typedef enum HttpCMD
@@ -32,6 +35,7 @@ struct TSCMD
 
 typedef boost::signals2::signal<void(char *, const int&)> M3u8Signal;
 typedef boost::signals2::signal<void(char *, const int&)> TsSignal;
+
 
 typedef struct M3U8Struct
 {
@@ -70,7 +74,8 @@ private:
 	int _send_ts_cmd(const std::string &ts_cmd);
 
 	//int _parser_m3u8_file(const char *m3u8_data, const int &length);
-	M3U8Data _parser_m3u8_file(const char *m3u8_data, const int &length);
+	//M3U8Data _parser_m3u8_file(const char *m3u8_data, const int &length);
+	bool _parser_m3u8_file(const char *m3u8_data, const int &length, M3U8Data &m3u8_data_struct);
 
 	int _push_ts_cmd(const string &ts_cmd);
 	bool _get_ts_cmd(TSCMD &cmd);
@@ -80,6 +85,10 @@ private:
 
 	int _do_m3u8_task();
 	int _do_ts_task();
+
+	void _write_ts_file_list(const string &ts_file_name, const int &index);
+	void _write_content_to_file(char *data, const int &data_len);
+	pugi::xml_document ts_file_doc_;
 
     TsSignal ts_send_signal_;
 
@@ -103,7 +112,9 @@ private:
 
 	int ts_file_index_;
     bool b_exit;/* << exit the thread.*/
-	std::string http_packet;/*<< one http packet*/
+	std::string http_packet;/*<< one http packet buff with m3u8 data*/
+	std::string http_ts_packet_;/*<< one http packet buff with ts data*/
+	int save_content_index_;
 };
 
 typedef std::shared_ptr<StreamReceiver> StreamReceiverPtr;

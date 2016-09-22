@@ -156,7 +156,12 @@
     <Text Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="incl\demux.h" />
+    <ClInclude Include="incl\dvb.h" />
     <ClInclude Include="incl\errcode.h" />
+    <ClInclude Include="incl\m3u8define.h" />
+    <ClInclude Include="incl\m3u8Parser.h" />
+    <ClInclude Include="incl\pat_pmt.h" />
     <ClInclude Include="incl\pre_boost_basic.h" />
     <ClInclude Include="incl\pre_regex.h" />
     <ClInclude Include="incl\pre_std_basic.h" />
@@ -170,13 +175,18 @@
     <ClInclude Include="incl\tcpclient.h" />
     <ClInclude Include="incl\test_rule_manager.h" />
     <ClInclude Include="incl\test_stream_receiver.h" />
+    <ClInclude Include="incl\tspacket.h" />
     <ClInclude Include="incl\udpclient.h" />
     <ClInclude Include="incl\udp_socket_session.h" />
     <ClInclude Include="incl\uri_parser.h" />
+    <ClInclude Include="incl\ztypes.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="targetver.h" />
+    <ClInclude Include="test_stream_sender.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="src\m3u8parser.cpp" />
+    <ClCompile Include="src\pat_pmt.cpp" />
     <ClCompile Include="src\pugixml.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
     </ClCompile>
@@ -189,6 +199,7 @@
     <ClCompile Include="src\tcpclient.cpp" />
     <ClCompile Include="src\test_rule_manager.cpp" />
     <ClCompile Include="src\test_stream_receiver.cpp" />
+    <ClCompile Include="src\tspacket.cpp" />
     <ClCompile Include="src\udpclient.cpp" />
     <ClCompile Include="src\udp_socket_session.cpp" />
     <ClCompile Include="src\uri_parser.cpp" />

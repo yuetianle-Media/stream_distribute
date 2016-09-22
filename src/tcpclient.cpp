@@ -115,7 +115,7 @@ int TCPClient::wait_response()
 				if (sz > 0)
 				{
 					string req((char*)buff.address(), sz);
-					std::cout << "receive data:" << req << std::endl;
+					//std::cout << "receive data:" << req << std::endl;
 					data_send_signal_((char*)req.c_str(), sz);
 				}
 				else

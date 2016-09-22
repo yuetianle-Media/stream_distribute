@@ -1,14 +1,40 @@
 #pragma once
-#include "M3u8define.h"
+#include "m3u8define.h"
 #include <map>
 #include <vector>
 #include <iostream>
+#include <string.h>
+#ifdef __linux__
+#include <strings.h>
+#endif // linux
 //warning not thread safe.
 
+inline const char * STRSTR(const char *src, const char *substr)
+{
+#ifdef _WIN32
+	return strstr(src, substr);
+#else
+	int len = strlen(substr);
+	if (0 == len)
+	{
+		return NULL;
+	}
+	while (*src)
+	{
+		if (0 == strncasecmp(src, substr, len))
+		{
+			return src;
+		}
+		++src;
+	}
+	return NULL;
+#endif // _WIN32
+}
 inline bool v_str_is_start_with(const std::string &src, const std::string &flag)
 {
-	int index = src.find_first_of(flag);
-	if (std::string::npos != index && index == 0)
+	//char *index = strstr((char*)src.c_str(), (char*)flag.c_str());
+	const char *index = STRSTR((char*)src.c_str(), (char*)flag.c_str());
+	if (nullptr != index && 0 == int(index - src.c_str()))
 	{
 		return true;
 	}
@@ -105,26 +131,30 @@ public:
 	M3u8Parser(const std::string &content);
 	~M3u8Parser();
 	//static M3u8NormalData s_data;
-	static std::map<std::string, ContentType>s_data;
+	//static std::map<std::string, ContentType>s_data;
 	typedef std::map<std::string, ContentType>::iterator DATA_ITER;
 	static std::map<std::string, bool> s_state;
+
+	bool get_ts_file_list(std::vector<std::string> &ts_file_list);
+	float get_max_duration();
 private:
-	int _parse_key(const std::string &content);
+	//int _parse_key(const std::string &content);
 	int _parse_extintf(const std::string &content, const int &line_no, bool strict);
 	int _parse_ts_chunk(const std::string &content);
-	int _parse_attribute_list(const std::string prefix, const std::string &content, void* func);
-	int _parse_stream_inf(const std::string &content);
-	int _parse_i_frame_stream_inf(const std::string &content);
-	int _parse_media(const std::string &content);
-	int _parse_variant_playlist(const std::string &content);
-	int _parse_byterange(const std::string &content);
+	//int _parse_attribute_list(const std::string prefix, const std::string &content, void* func);
+	//int _parse_stream_inf(const std::string &content);
+	//int _parse_i_frame_stream_inf(const std::string &content);
+	//int _parse_media(const std::string &content);
+	//int _parse_variant_playlist(const std::string &content);
+	//int _parse_byterange(const std::string &content);
 	int _parse_simple_parameter_raw_value(const std::string &content, const std::string &cast_to, bool normalize=false);
 	int _parse_and_set_simple_parameter_raw_value(const std::string &content, const std::string &cast_to, bool normalize=false);
 	int _parse_simple_parameter(const std::string &content, const std::string &cast_to);
-	int _parse_cueout(const std::string &content);
+	//int _parse_cueout(const std::string &content);
 	int _strings_to_lines(const std::string &content);
 
 	std::vector<std::string> content_lines_;
+	M3u8BaseData m3u8_data_;
 	std::string m3u8_content_;
 };
 

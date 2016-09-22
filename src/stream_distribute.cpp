@@ -14,9 +14,10 @@ int main(int argc, char **argv)
 	//{
 	//	this_thread::sleep_for(std::chrono::seconds(5));
 	//}
-	//const string stream_uri = "http://221.181.100.24:8088/envivo_v/SD/cctv/doc/711/01.m3u8";
-	const string stream_uri = "http://192.168.203.131:9006/hls/test.m3u8";
-	test_stream_receive(stream_uri);
+	const string stream_uri = "http://221.181.100.24:8088/envivo_v/SD/cctv/doc/711/01.m3u8";
+	//const string stream_uri = "http://192.168.203.211:9006/hls/test.m3u8";
+	const string world_stream_uri = "http://221.181.100.24:8088/ws_v/sjdl/sjdl711/711/01.m3u8";
+	test_stream_receive(world_stream_uri);
 	while (true)
 	{
 		this_thread::sleep_for(std::chrono::seconds(5));
