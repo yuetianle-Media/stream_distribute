@@ -5,22 +5,24 @@
  */
 
 #pragma once
-#include <iostream>
-#include <vector>
-#include <boost/enable_shared_from_this.hpp>
-
-class StreamBuffer: public boost::enable_shared_from_this<StreamBuffer>
+using namespace std;
+#include "errcode.h"
+#include "pre_std_basic.h"
+#define v_lock(l, m) std::lock_guard<decltype((m))> (l)((m))
+class StreamBuffer: public std::enable_shared_from_this<StreamBuffer>
 {
     public:
-        StreamBuffer(const int &size);
+        StreamBuffer(const long int &size);
         ~StreamBuffer();
 
         int pushToBuffer(const char *content, const int &size);
-
+		bool  pop_data(char *dest, const int &dest_len, const int &data_len);
+		bool is_empty();
     private:
-        int current_index_;
-        int data_size_;
+        std::atomic<int> current_index_;
+        std::atomic<int> data_size_;
         std::vector<char> data_;
+		std::mutex mtx_data_;
 };
 
-typedef boost::shared_ptr<StreamBuffer> StreamBufferPtr;
+typedef std::shared_ptr<StreamBuffer> StreamBufferPtr;

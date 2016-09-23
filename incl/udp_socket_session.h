@@ -26,8 +26,8 @@ protected:
 	boost::asio::ip::udp::socket socket_;
 	int local_port_;
 	int time_out_ms_;
-	shared_ptr<boost::asio::io_service> io_svt_;
-	shared_ptr<boost::asio::io_service::work> work_;
+	std::shared_ptr<boost::asio::io_service> io_svt_;
+	std::shared_ptr<boost::asio::io_service::work> work_;
 	boost::asio::io_service::strand strand_;
 
 	coro_timer_ptr timer_ptr_;

@@ -186,7 +186,10 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\m3u8parser.cpp" />
-    <ClCompile Include="src\pat_pmt.cpp" />
+    <ClCompile Include="src\pat_pmt.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="src\pugixml.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
     </ClCompile>
@@ -199,7 +202,10 @@
     <ClCompile Include="src\tcpclient.cpp" />
     <ClCompile Include="src\test_rule_manager.cpp" />
     <ClCompile Include="src\test_stream_receiver.cpp" />
-    <ClCompile Include="src\tspacket.cpp" />
+    <ClCompile Include="src\tspacket.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="src\udpclient.cpp" />
     <ClCompile Include="src\udp_socket_session.cpp" />
     <ClCompile Include="src\uri_parser.cpp" />

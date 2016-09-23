@@ -1,4 +1,3 @@
-#include "stdafx.h"
 #include "pat_pmt.h"
 #include "demux.h"
 #include <string.h>

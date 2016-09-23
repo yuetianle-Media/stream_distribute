@@ -12,3 +12,8 @@
 #define E_FILE_ERROR -1001
 #define E_FILE_BAD_FORMAT -1002
 #pragma endregion File
+
+#pragma region Buffer
+#define E_BUFFER_EMPTY -2000
+#define E_BUFFER_FULL -2001
+#pragma endregion Buffer

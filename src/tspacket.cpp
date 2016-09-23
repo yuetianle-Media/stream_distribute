@@ -1,5 +1,4 @@
-﻿#include "stdafx.h"
-#include "tspacket.h"
+﻿#include "tspacket.h"
 
 
 

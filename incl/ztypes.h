@@ -5,6 +5,7 @@
  * @file ztypes.h
  * @brief 提供通用类型定义的头文件。
  */
+#pragma once
 #include <ctype.h>
 #include <vector>
 #include <typeinfo>
@@ -37,12 +38,20 @@ typedef unsigned char			BYTE;
  * @typedef WORD
  * @brief 无符号16位整形，16 位
  */
+#ifndef WORD
 typedef unsigned short 			WORD;
+#endif
 /**
  * @typedef DWORD
  * @brief 无符号32位整形
  */
+#ifdef _WIN32
+#include <Windows.h>
+#else
+
 typedef unsigned int				DWORD;
+#endif // _WIN32
+
 
 
 /**

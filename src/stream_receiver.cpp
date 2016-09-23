@@ -15,7 +15,7 @@ StreamReceiver::StreamReceiver(const string &url)
 
 StreamReceiver::~StreamReceiver()
 {
-
+	std::cout << "come desctruct Stream receiver" << std::endl;
 }
 
 int StreamReceiver::start()
@@ -215,6 +215,7 @@ void StreamReceiver::m3u8Callback(char *data, const int &data_len)
 				_parser_m3u8_file(m3u8_content.c_str(), m3u8_content.length(), m3u8_data_struct);
 				for (auto &item : m3u8_data_struct.ts_file_list)
 				{
+					cout << "file:" << item.first << "index:" << item.second << endl;
 					string ts_cmd_str = _make_down_ts_cmd(item.first);
 					_push_ts_cmd(ts_cmd_str);
 					_write_ts_file_list(item.first, (int)item.second);

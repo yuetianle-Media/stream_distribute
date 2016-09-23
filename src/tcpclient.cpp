@@ -116,6 +116,7 @@ int TCPClient::wait_response()
 				{
 					string req((char*)buff.address(), sz);
 					//std::cout << "receive data:" << req << std::endl;
+					//std::cout << "start time:" << boost::local_time::cur
 					data_send_signal_((char*)req.c_str(), sz);
 				}
 				else
