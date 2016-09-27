@@ -2,18 +2,16 @@
 #include "socket_session.h"
 SocketSession::SocketSession(const string &remote_server, const int &port, const int &time_out)
     : io_svt_ptr_(make_shared<boost::asio::io_service>())\
+    , socket_(*io_svt_ptr_)\
 	, remote_addr_(boost::asio::ip::address::from_string(remote_server), port)\
-	, socket_(*io_svt_ptr_)\
-	//, strand_(socket_.get_io_service())
-	, strand_(*io_svt_ptr_)\
-	, timeout_(time_out)\
-	, timer_ptr_(new boost::asio::steady_timer(socket_.get_io_service()))
+	, strand_(socket_.get_io_service())\
+	, timer_ptr_(new boost::asio::steady_timer(socket_.get_io_service()))\
+	, timeout_(time_out)
 {
-	//timer_ptr_.reset();
-	//work_ptr_ = boost::make_shared<boost::asio::io_service::work>(boost::ref(*io_svt_ptr_));
 	work_ptr_ = make_shared<boost::asio::io_service::work>(*io_svt_ptr_);
 	auto svc = io_svt_ptr_;
-	thread thrd([svc]() 
+
+	thread thrd([svc]()
 	{
 		boost::system::error_code ec;
 		svc->run(ec);
@@ -21,26 +19,12 @@ SocketSession::SocketSession(const string &remote_server, const int &port, const
 		std::cout << "service terminated." << std::endl;
 #endif // _DEBUG
 	});
-	thrd.detach();
 
+	thrd.detach();
 }
 
 SocketSession::~SocketSession()
 {
-}
-
-
-int SocketSession::_connect()
-{
-    boost::system::error_code ec;
-	socket_.connect(remote_addr_, ec);
-	if (ec)
-	{
-		std::cout << "socket is null!" << std::endl;
-		return -1;
-	}
-	else
-		return 0;
 }
 
 int SocketSession::_connect_ex(const string & content)
@@ -58,7 +42,9 @@ int SocketSession::_connect_ex(const string & content)
 			prom->set_value(result);
 		}
 	}, timeout_);
+
 	cout << "connect = " << (result == 0) << endl;
+
 	if (socket_.is_open())
 	{
 		//resize_recv_buffer(m_recv_buff_size);
@@ -79,7 +65,6 @@ void SocketSession::_close()
 	{
 		timer_ptr_->cancel(ec);
 	}
-
 }
 
 int SocketSession::_async_connect(const string &content, boost::asio::yield_context yield)
@@ -93,7 +78,6 @@ int SocketSession::_async_connect(const string &content, boost::asio::yield_cont
 	}
 	if (0 < content.length())
 	{
-		//boost::asio::async_write(socket_, boost::asio::buffer(content.data(), content.length()), boost::bind(&SocketSession::write_handler, this, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
 		boost::asio::async_write(socket_, boost::asio::buffer(content.data()\
 			, content.length())\
 			, [this](boost::system::error_code ec, int size)
@@ -138,7 +122,7 @@ int SocketSession::_run_sync_action(coro_action operation_action, const int & ti
 	boost::system::error_code ec;
 	auto self = shared_from_this();
 	timer->expires_from_now(std::chrono::milliseconds(time_out), ec);
-	boost::asio::spawn(strand_, [this, self, prom, timer](boost::asio::yield_context yield) 
+	boost::asio::spawn(strand_, [this, self, prom, timer](boost::asio::yield_context yield)
 	{
 		boost::system::error_code ec;
 		timer->async_wait(yield[ec]);
@@ -148,7 +132,7 @@ int SocketSession::_run_sync_action(coro_action operation_action, const int & ti
 		}
 		else if (timer->expires_from_now() <= std::chrono::milliseconds(0))
 		{
-			try 
+			try
 			{
 				if (nullptr != prom)
 				{
@@ -183,10 +167,10 @@ void SocketSession::_spawn_handle_timeout(const coro_timer_ptr & ptimer, const c
 			if (nullptr != ptimer)
 			{
 				ptimer->async_wait(yield[ec]);
-				
+
 				if (ptimer->expires_from_now() <= chrono::milliseconds(0))
 				{
-					//socket_.close(ec);
+					socket_.close(ec);
 					if (prom != nullptr)
 					{
 						if (prom->get_future().valid())
@@ -198,25 +182,4 @@ void SocketSession::_spawn_handle_timeout(const coro_timer_ptr & ptimer, const c
 			}
 		}
 	});
-
-}
-
-void SocketSession::write_handler(const boost::system::error_code & ec, const int & size)
-{
-	if (ec)
-	{
-		_close();
-	}
-}
-
-void SocketSession::connect_handler(const boost::system::error_code &ec)
-{
-    if (!ec)
-    {
-        std::cout << "connect the server faile!" << std::endl;
-    }
-    else
-    {
-        std::cout << "connect success.";
-    }
 }

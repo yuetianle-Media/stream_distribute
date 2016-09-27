@@ -86,7 +86,7 @@ inline std::string v_str_replace(const std::string& src, const std::string& repl
 	while (pos != std::string::npos)
 	{
 #ifdef _DEBUG
-		std::cout << "replacexxx:" << pos_begin << " " << pos << std::endl;
+		//std::cout << "replacexxx:" << pos_begin << " " << pos << std::endl;
 #endif
 		ret.append(src.data() + pos_begin, pos - pos_begin);
 		ret += dest;

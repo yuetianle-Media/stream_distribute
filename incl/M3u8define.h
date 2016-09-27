@@ -1,5 +1,7 @@
 #pragma once
 #include <string>
+#include <map>
+
 const std::string M3U8_EXT_X_TARGETDURAION = "#EXT-X-TARGETDURATION";
 const std::string M3U8_EXT_X_MEDIDA_SEQUENCE = "#MEDIDA-SEQUENCE";
 const std::string M3U8_EXT_X_PROGRAM_DATE_TIME = "#EXT-X-PROGRAM-DATE-TIME";
@@ -20,3 +22,17 @@ const std::string M3U8_EXT_X_CUE_END ="#EXT-X-CUE-IN";
 const std::string M3U8_EXTINF = "#EXTINF";
 const std::string M3U8_EXT_I_FRAME_ONLY = "#EXT-X-I-FRAMES-ONLY";
 const std::string M3U8_EXT_IS_INDEPENDENT_SEGMENTS = "#EXT-X-INDEPENDENT-SEGMENTS";
+
+
+typedef struct M3U8Struct
+{
+	int version;
+	int current_seq;
+	double max_duration;
+	std::map<std::string, double > ts_file_list;/*<< file_name:time*/
+	M3U8Struct()
+		:version(3), current_seq(0), max_duration(0)
+	{
+
+	}
+}M3U8Data;

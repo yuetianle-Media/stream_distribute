@@ -18,11 +18,15 @@ public:
 
 
 	int write(char *data, const int &data_len);
+	int write(char *data, const int &data_len, const double &need_time);
 	int receive(const int &data_len=0);
 	int connect();
-protected:
-	int _async_connect(boost::asio::yield_context yield);
+	string remote_ip() const { return remote_ep_.address().to_string(); }
+	int remote_port() const { return remote_ep_.port(); }
 private:
+	int _write(char *data, const int &data_len);
+	int _connect();
+	int _async_connect(boost::asio::yield_context yield);
 	boost::asio::ip::udp::endpoint remote_ep_;
 	int segment_size_;
 };

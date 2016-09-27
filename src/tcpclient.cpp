@@ -1,8 +1,7 @@
-
 #include "stdafx.h"
 #include "tcpclient.h"
 
-TCPClient::TCPClient(const string &remote_server, const int &port, const int &time_out/*s*/)
+TCPClient::TCPClient(const string &remote_server, const int &port, const int &time_out/*ms*/)
 	:SocketSession(remote_server, port, time_out)
 {
 
@@ -127,7 +126,7 @@ int TCPClient::wait_response()
 			else
 			{
 				std::cout << "err:" << ec.value() << "mesg:" << ec.message() << std::endl;
-				//_close();
+				_close();
 				break;
 			}
 		}
@@ -140,6 +139,10 @@ int TCPClient::wait_response()
 int TCPClient::_send(const char * content, const int & length, boost::asio::yield_context yield)
 {
 	boost::system::error_code ec;
+	if (!socket_.is_open())
+	{
+		connect();
+	}
 	if (timer_ptr_)
 	{
 		timer_ptr_->expires_from_now(std::chrono::milliseconds(timeout_), ec);

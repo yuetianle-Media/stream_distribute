@@ -87,6 +87,51 @@ std::string StreamReceiver::_make_m3u8_cmd(const string &stream_url/*=0*/)
 	return ss.str();
 }
 
+bool StreamReceiver::_make_m3u8_cmd(HTTPM3U8CMD & m3u8_cmd, const std::string & stream_url)
+{
+	std::stringstream ss;
+	if (stream_url.empty())
+	{
+		if (!uri_parser_.is_ready())
+		{
+			return false;
+		}
+		ss << "GET " << "/" << uri_parser_.resource_path() << " HTTP/1.1" << "\r\n"\
+			<< "Host: " << uri_parser_.host() << ":" << uri_parser_.port() << " \r\n"\
+			<< "User-Agent: " << "me-test" << "\r\n"\
+			//<< "Accept: " << "test/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" << "\r\n"
+			<< "Accept: " << "test/html,application/xhtml+xml,application/xml" << "\r\n"\
+			<< "Connection: " << "keep-alive" << "\r\n\r\n";
+#ifdef _WIN32
+		memcpy_s(m3u8_cmd.cmd, sizeof(m3u8_cmd.cmd), ss.str().c_str(), ss.str().length());
+#else
+		memcpy(m3u8_cmd.cmd, ss.str().c_str(), ss.str().length());
+#endif
+		m3u8_cmd.cmd_length = ss.str().length();
+		return true;
+	}
+	else
+	{
+		URIParser uri_parser(stream_url);
+		if (!uri_parser.is_ready())
+		{
+			return false;
+		}
+		ss << "GET " << "/" << uri_parser.resource_path() << " HTTP/1.1" << "\r\n"\
+			<< "Host: " << uri_parser.host() << ":" << uri_parser.port() << " \r\n"\
+			<< "User-Agent: " << "me-test" << "\r\n"\
+			<< "Accept: " << "test/html,application/xhtml+xml,application/xml" << "\r\n"\
+			<< "Connection: " << "keep-alive" << "\r\n\r\n";
+#ifdef _WIN32
+		memcpy_s(m3u8_cmd.cmd, sizeof(m3u8_cmd.cmd), ss.str().c_str(), ss.str().length());
+#else
+		memcpy(m3u8_cmd.cmd, ss.str().c_str(), ss.str().length());
+#endif
+		m3u8_cmd.cmd_length = ss.str().length();
+		return true;
+	}
+}
+
 std::string StreamReceiver::_make_down_ts_cmd(const string &ts_file)
 {
 	std::stringstream ss;
@@ -102,6 +147,11 @@ std::string StreamReceiver::_make_down_ts_cmd(const string &ts_file)
 		<< "Accept: " << "test/html,application/xhtml+xml,application/xml" << "\r\n"\
 		<< "Connection: " << "keep-alive" << "\r\n\r\n";
 	return ss.str();
+}
+
+bool StreamReceiver::_make_down_ts_cmd(HTTPTSCMD &ts_cmd, const std::string &ts_file)
+{
+	return true;
 }
 
 int StreamReceiver::_send_m3u8_cmd(const string &m3u8_cmd)
@@ -157,8 +207,7 @@ bool StreamReceiver::_parser_m3u8_file(const char *m3u8_data, const int &length,
 
 int StreamReceiver::_push_ts_cmd(const string &ts_cmd_str)
 {
-
-	TSCMD ts_cmd;
+	HTTPTSCMD ts_cmd;
 	memcpy(ts_cmd.cmd, ts_cmd_str.c_str(), ts_cmd_str.length());
 	ts_cmd.cmd_length = ts_cmd_str.length();
 	std::map<string, int>::iterator iter = ts_all_task_map_.find(ts_cmd_str);
@@ -170,14 +219,14 @@ int StreamReceiver::_push_ts_cmd(const string &ts_cmd_str)
 	return 0;
 }
 
-bool StreamReceiver::_get_ts_cmd(TSCMD &cmd)
+bool StreamReceiver::_get_ts_cmd(HTTPTSCMD &cmd)
 {
 	return true;
 }
 
 void StreamReceiver::m3u8Callback(char *data, const int &data_len)
 {
-	std::cout << "data:" << data << "data_len:" << data_len << endl;
+	//std::cout << "data:" << data << "data_len:" << data_len << endl;
 	
 	if (100 < ts_all_task_map_.size())//当数据过多时删除一些旧数据
 	{
@@ -215,10 +264,10 @@ void StreamReceiver::m3u8Callback(char *data, const int &data_len)
 				_parser_m3u8_file(m3u8_content.c_str(), m3u8_content.length(), m3u8_data_struct);
 				for (auto &item : m3u8_data_struct.ts_file_list)
 				{
-					cout << "file:" << item.first << "index:" << item.second << endl;
+					//cout << "file:" << item.first << "index:" << item.second << endl;
 					string ts_cmd_str = _make_down_ts_cmd(item.first);
 					_push_ts_cmd(ts_cmd_str);
-					_write_ts_file_list(item.first, (int)item.second);
+					_write_ts_file_list(item.first, item.second);
 				}
 				http_packet = http_packet.substr(one_packet_length\
 					, all_data_length - one_packet_length);//去除一整包http
@@ -239,11 +288,6 @@ void StreamReceiver::m3u8Callback(char *data, const int &data_len)
 
 void StreamReceiver::tsCallback(char *data, const int &data_len)
 {
-	//if (data && 0 < data_len)
-	//{
-	//	_write_content_to_file(data, data_len);
-	//}
-	//return;
 	if (data && 0 < data_len)
 	{
 		char *end_char = strstr(data, (char*)HTTP_HEAD_END.c_str());
@@ -266,40 +310,21 @@ void StreamReceiver::tsCallback(char *data, const int &data_len)
 				http_ts_packet_.clear();
 				return;
 			}
-			char *end_index = end_char + 4;//Http头的最后一位
-			if (!end_index)
+			int http_content_length = end_char - data + 4;
+			int ts_send_size = data_len - http_content_length;
+			if (0 < ts_send_size)
 			{
-				http_ts_packet_.clear();//清空http头
-				return;
+				cout << "send ts data size:" << ts_send_size << std::endl;
+				ts_send_signal_(end_char+4, ts_send_size);
 			}
 			else
 			{
-				int http_index = end_char + 4 - http_ts_packet_.c_str();
-				if (http_index >= http_ts_packet_.length())
-				{
-					return;
-				}
-				http_ts_packet_.clear();//收到http头
-				ts_send_signal_((char*)http_ts_packet_.at(http_index), http_ts_packet_.length()-http_index);
-				return;
+				cout << "end_index" << std::endl;
 			}
-			//if (regex_finder.find(http_ts_packet_, "Content-Length: (\\d+)"))
-			//{
-			//	int content_length = atoi(regex_finder[1].c_str());//http头后的数据长度
-			//	int one_packet_length = http_index + content_length;//一包http数据的长度
-			//	int all_data_length = http_ts_packet_.length();//接收到数据的总长度
-			//	if (one_packet_length <= all_data_length)
-			//	{
-			//		char *data_begin = data + http_index;
-			//		char *data_end = data_begin + content_length;
-			//		ts_send_signal_(data_begin, content_length);
-			//		http_ts_packet_ = http_ts_packet_.substr(one_packet_length\
-			//			, all_data_length - one_packet_length);//去除一整包http
-			//	}
-			//}
 		}
 		else//不是http头
 		{
+			cout << "send ts data size:" << data_len << std::endl;
 			ts_send_signal_(data, data_len);
 		}
 	}
@@ -309,7 +334,6 @@ int StreamReceiver::_do_m3u8_task()
 {
     while (1) {
 		if (0 < play_stream_.length())
-			//m3u8_tcp_client_ptr_->receive();
             _send_m3u8_cmd(play_stream_);
         if (b_exit)
         {
@@ -323,11 +347,10 @@ int StreamReceiver::_do_m3u8_task()
 int StreamReceiver::_do_ts_task()
 {
     while (1) {
-		TSCMD ts_cmd_struct;
+		HTTPTSCMD ts_cmd_struct;
 		while (ts_task_list_.pop(ts_cmd_struct))
 		{
 			string ts_cmd = ts_cmd_struct.cmd;
-			//string ts_cmd;
             if (0 < ts_cmd.length())
                 _send_ts_cmd(ts_cmd);
 		}
@@ -351,7 +374,7 @@ void StreamReceiver::_write_content_to_file(char *data, const int &data_len)
 {
 	fstream out_file;
 	char out_file_name[100] = {0};
-	sprintf(out_file_name, "out_file_%d.dat", save_content_index_);
+	sprintf(out_file_name, "out_file_%d.ts", save_content_index_);
 	save_content_index_++;
 	out_file.open(out_file_name, ios::out | ios::binary | ios::app);
 	out_file.write(data, data_len);

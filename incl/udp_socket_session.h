@@ -22,11 +22,14 @@ public:
 	typedef std::shared_ptr<coro_promise> coro_promise_ptr;
 	typedef boost::asio::steady_timer coro_timer;
 	typedef std::shared_ptr<coro_timer> coro_timer_ptr;
+
+	boost::asio::ip::udp::socket& socket() { return udp_socket_; }
+	boost::asio::io_service::strand& strand() { return strand_; }
 protected:
-	boost::asio::ip::udp::socket socket_;
 	int local_port_;
 	int time_out_ms_;
-	std::shared_ptr<boost::asio::io_service> io_svt_;
+	std::shared_ptr<boost::asio::io_service> io_svt_ptr_;
+	boost::asio::ip::udp::socket udp_socket_;
 	std::shared_ptr<boost::asio::io_service::work> work_;
 	boost::asio::io_service::strand strand_;
 
