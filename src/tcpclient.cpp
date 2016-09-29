@@ -47,6 +47,10 @@ int TCPClient::receive()
 
 int TCPClient::async_send(const char *content, const int &length)
 {
+	if (!socket_.is_open())
+	{
+		connect();
+	}
 	boost::system::error_code ec;
 	if (timer_ptr_)
 	{
@@ -81,7 +85,7 @@ int TCPClient::async_send(const char *content, const int &length)
 	}
 	else
 	{
-		cout << "send size:" << length << std::endl;
+		cout << "send " << content << "size:" << length << std::endl;
 	}
 	return 0;
 }

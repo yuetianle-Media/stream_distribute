@@ -3,9 +3,9 @@
 
 
 StreamReceiver::StreamReceiver(const string &url)
-	:ts_task_list_(10000), uri_parser_(url), play_stream_duration_(5)\
+	:ts_task_list_(10000), uri_parser_(url), play_stream_duration_(2)\
 	, m3u8_thrd_ptr_(nullptr), ts_thrd_ptr_(nullptr), b_exit(false)\
-	, ts_file_index_(0), save_content_index_(0)
+	, ts_file_index_(0), callback_times_(0), save_content_index_(0)
 {
 	play_stream_ = _make_m3u8_cmd(url);
 	m3u8_tcp_client_ptr_	= std::make_shared<TCPClient>(uri_parser_.host(), uri_parser_.port(), 5000);
@@ -41,7 +41,7 @@ int StreamReceiver::start()
 		ts_tcp_client_ptr_->wait_response();
     }
 	m3u8_thrd_ptr_.reset(new std::thread(std::bind(&StreamReceiver::_do_m3u8_task, this)));
-	ts_thrd_ptr_.reset(new std::thread(std::bind(&StreamReceiver::_do_ts_task, this)));
+	//ts_thrd_ptr_.reset(new std::thread(std::bind(&StreamReceiver::_do_ts_task, this)));
     if (nullptr != m3u8_thrd_ptr_)
     {
         m3u8_thrd_ptr_->detach();
@@ -158,6 +158,7 @@ int StreamReceiver::_send_m3u8_cmd(const string &m3u8_cmd)
 {
     if (nullptr != m3u8_tcp_client_ptr_)
     {
+		vvlog_i("send m3u8 cmd:" << m3u8_cmd);
         m3u8_tcp_client_ptr_->async_send(m3u8_cmd.data(), m3u8_cmd.length());
     }
 	return 0;
@@ -199,7 +200,7 @@ bool StreamReceiver::_parser_m3u8_file(const char *m3u8_data, const int &length,
 	int index = 0;
 	for (auto &item : file_list)
 	{
-		m3u8_data_struct.ts_file_list.insert(std::make_pair(item, index));
+		m3u8_data_struct.ts_file_list.push_back(item);
 		index++;
 	}
 	return true;
@@ -213,7 +214,9 @@ int StreamReceiver::_push_ts_cmd(const string &ts_cmd_str)
 	std::map<string, int>::iterator iter = ts_all_task_map_.find(ts_cmd_str);
 	if (iter == ts_all_task_map_.end())//此任务没有添加过
 	{
+		_write_ts_file_list("task.xml", ts_cmd_str, 0);
 		ts_all_task_map_.insert(std::make_pair(ts_cmd_str, ts_file_index_++));
+		//vvlog_i("dd");
 		ts_task_list_.push(ts_cmd);
 	}
 	return 0;
@@ -226,6 +229,9 @@ bool StreamReceiver::_get_ts_cmd(HTTPTSCMD &cmd)
 
 void StreamReceiver::m3u8Callback(char *data, const int &data_len)
 {
+	//char http_out_file_name[1024] = { 0 };
+	//sprintf(http_out_file_name, "http_out_file_%d.ts", save_content_index_);
+	//_write_content_to_file(http_out_file_name, data, data_len);
 	//std::cout << "data:" << data << "data_len:" << data_len << endl;
 	
 	if (100 < ts_all_task_map_.size())//当数据过多时删除一些旧数据
@@ -251,28 +257,60 @@ void StreamReceiver::m3u8Callback(char *data, const int &data_len)
 			http_packet.clear();
 			return;
 		}
-		int http_index = end_char + 4 - http_packet.c_str();
+		int http_head_length = end_char + 4 - http_packet.data();
+		if (http_head_length == data_len)//只有HTTP头
+			return;
 		if (regex_finder.find(http_packet, "Content-Length: (\\d+)"))
 		{
 			int content_length = atoi(regex_finder[1].c_str());//http头后的数据长度
-			int one_packet_length = http_index + content_length;//一包http数据的长度
-			int all_data_length = http_packet.length();//接收到数据的总长度
-			if (one_packet_length <= all_data_length)
+			int one_packet_length = content_length + http_head_length;
+			if (one_packet_length <= http_packet.length())
 			{
-				string m3u8_content = http_packet.substr(http_index, content_length);
+				string m3u8_content = http_packet.substr(http_head_length, content_length);
 				M3U8Data m3u8_data_struct;
 				_parser_m3u8_file(m3u8_content.c_str(), m3u8_content.length(), m3u8_data_struct);
+				char out_file_name[1024] = {0};
+				sprintf(out_file_name, "m3u8callbackfile_%d.xml", callback_times_);
+				int file_index = 0;
 				for (auto &item : m3u8_data_struct.ts_file_list)
 				{
 					//cout << "file:" << item.first << "index:" << item.second << endl;
-					string ts_cmd_str = _make_down_ts_cmd(item.first);
+					string ts_cmd_str = _make_down_ts_cmd(item);
 					_push_ts_cmd(ts_cmd_str);
-					_write_ts_file_list(item.first, item.second);
+					//_write_ts_file_list(out_file_name, item, file_index);
+					file_index++;
 				}
+				callback_times_++;
 				http_packet = http_packet.substr(one_packet_length\
-					, all_data_length - one_packet_length);//去除一整包http
+					, http_packet.length() - one_packet_length);//去除一整包http
+				return;
 			}
 		}
+		//int http_index = end_char + 4 - http_packet.c_str();
+		//if (regex_finder.find(http_packet, "Content-Length: (\\d+)"))
+		//{
+		//	int content_length = atoi(regex_finder[1].c_str());//http头后的数据长度
+		//	int one_packet_length = http_index + content_length;//一包http数据的长度
+		//	int all_data_length = http_packet.length();//接收到数据的总长度
+		//	if (one_packet_length <= all_data_length)
+		//	{
+		//		string m3u8_content = http_packet.substr(http_index, content_length);
+		//		M3U8Data m3u8_data_struct;
+		//		_parser_m3u8_file(m3u8_content.c_str(), m3u8_content.length(), m3u8_data_struct);
+		//		char out_file_name[1024] = {0};
+		//		sprintf(out_file_name, "m3u8callbackfile_%d.xml", callback_times_);
+		//		for (auto &item : m3u8_data_struct.ts_file_list)
+		//		{
+		//			//cout << "file:" << item.first << "index:" << item.second << endl;
+		//			string ts_cmd_str = _make_down_ts_cmd(item.first);
+		//			_push_ts_cmd(ts_cmd_str);
+		//			_write_ts_file_list(out_file_name, item.first, item.second);
+		//		}
+		//		callback_times_++;
+		//		http_packet = http_packet.substr(one_packet_length\
+		//			, all_data_length - one_packet_length);//去除一整包http
+		//	}
+		//}
 	}
 	return;//没有找到一整包数据
 #pragma region test
@@ -288,6 +326,9 @@ void StreamReceiver::m3u8Callback(char *data, const int &data_len)
 
 void StreamReceiver::tsCallback(char *data, const int &data_len)
 {
+	char http_out_file_name[1024] = { 0 };
+	sprintf(http_out_file_name, "http_out_file_%d.txt", save_content_index_);
+	_write_content_to_file(http_out_file_name, data, data_len);
 	if (data && 0 < data_len)
 	{
 		char *end_char = strstr(data, (char*)HTTP_HEAD_END.c_str());
@@ -307,6 +348,7 @@ void StreamReceiver::tsCallback(char *data, const int &data_len)
 			}
 			if (http_code != 200)
 			{
+				cout << "ts call callback error len:" << data_len << "data:" << data << std::endl;
 				http_ts_packet_.clear();
 				return;
 			}
@@ -319,8 +361,9 @@ void StreamReceiver::tsCallback(char *data, const int &data_len)
 			}
 			else
 			{
-				cout << "end_index" << std::endl;
+				cout << "end_index ts_send_size:" << ts_send_size << std::endl;
 			}
+			http_ts_packet_.clear();
 		}
 		else//不是http头
 		{
@@ -360,23 +403,24 @@ int StreamReceiver::_do_ts_task()
 
 }
 
-void StreamReceiver::_write_ts_file_list(const string &ts_file_name, const int &index)
+void StreamReceiver::_write_ts_file_list(const string &out_file_name, const string &ts_file_name, const int &index)
 {
 	pugi::xml_node ts_file_node = ts_file_doc_.append_child("ts_file");
 	pugi::xml_attribute name_attr = ts_file_node.append_attribute("name");
 	name_attr.set_value(ts_file_name.c_str());
 	pugi::xml_attribute index_attr = ts_file_node.append_attribute("index");
 	index_attr.set_value(index);
-	ts_file_doc_.save_file("ts_file.xml", "\t", pugi::encoding_utf8);
+	char out_file[1024] = {0};
+	ts_file_doc_.save_file(out_file_name.data(), "\t", pugi::encoding_utf8);
 }
 
-void StreamReceiver::_write_content_to_file(char *data, const int &data_len)
+void StreamReceiver::_write_content_to_file(const string &out_file_name, char *data, const int &data_len)
 {
 	fstream out_file;
-	char out_file_name[100] = {0};
-	sprintf(out_file_name, "out_file_%d.ts", save_content_index_);
+	//char out_file_name[100] = {0};
+	//sprintf(out_file_name, "out_file_%d.ts", save_content_index_);
 	save_content_index_++;
-	out_file.open(out_file_name, ios::out | ios::binary | ios::app);
+	out_file.open(out_file_name.data(), ios::out | ios::binary | ios::app);
 	out_file.write(data, data_len);
 	out_file.close();
 }

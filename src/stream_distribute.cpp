@@ -12,7 +12,7 @@ extern void test_stream_sender(const string &url, const string &multi_server, co
 extern void test_udp_client(const string &addr, const int &port);
 int main(int argc, char **argv)
 {
-	const string config_file = "rules.xml";
+	//const string config_file = "rules.xml";
 	//test_rule_manager(config_file);
 	//while (true)
 	//{
@@ -32,7 +32,7 @@ int main(int argc, char **argv)
 
 
 	const string stream_uri = "http://192.168.203.211:9006/hls/test.m3u8";
-	test_stream_sender(stream_uri, "224.0.2.100", 1000);
+	test_stream_sender(stream_uri, "224.1.1.1", 65000);
 	while (true)
 	{
 		this_thread::sleep_for(std::chrono::seconds(5));

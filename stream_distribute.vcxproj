@@ -96,12 +96,13 @@
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>false</SDLCheck>
-      <AdditionalIncludeDirectories>.\incl;.;.\test;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.\incl;.;.\test;%(AdditionalIncludeDirectories);..\vistek_logger\include</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(SolutionDir)..\__output</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -126,13 +127,14 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>false</SDLCheck>
-      <AdditionalIncludeDirectories>.\incl;.;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.\incl;.;%(AdditionalIncludeDirectories);..\vistek_logger\incl;../vistek_logger/incl</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(SolutionDir)..\__output</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -171,8 +173,10 @@
     <ClInclude Include="incl\rule_manager.h" />
     <ClInclude Include="incl\socket_session.h" />
     <ClInclude Include="incl\stream_buffer.h" />
+    <ClInclude Include="incl\stream_manager.h" />
     <ClInclude Include="incl\stream_receiver.h" />
     <ClInclude Include="incl\stream_sender.h" />
+    <ClInclude Include="incl\stream_sender_buffer.h" />
     <ClInclude Include="incl\tcpclient.h" />
     <ClInclude Include="incl\test_rule_manager.h" />
     <ClInclude Include="incl\test_stream_receiver.h" />
@@ -185,6 +189,7 @@
     <ClInclude Include="incl\ztypes.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="targetver.h" />
+    <ClInclude Include="test_stream_manager.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\m3u8parser.cpp" />
@@ -199,8 +204,10 @@
     <ClCompile Include="src\socket_session.cpp" />
     <ClCompile Include="src\stream_buffer.cpp" />
     <ClCompile Include="src\stream_distribute.cpp" />
+    <ClCompile Include="src\stream_manager.cpp" />
     <ClCompile Include="src\stream_receiver.cpp" />
     <ClCompile Include="src\stream_sender.cpp" />
+    <ClCompile Include="src\stream_sender_buffer.cpp" />
     <ClCompile Include="src\tcpclient.cpp" />
     <ClCompile Include="src\test_rule_manager.cpp" />
     <ClCompile Include="src\test_stream_receiver.cpp" />

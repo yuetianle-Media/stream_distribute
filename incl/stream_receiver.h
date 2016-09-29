@@ -1,3 +1,11 @@
+/**
+ * @file stream_receiver.h
+ * @brief 数据接收类.
+ * @author lee, shida23577@hotmail.com
+ * @version 1.0.1
+ * @date 2016-09-27
+ */
+
 #ifndef _STREAM_RECEIVER_H_
 #define _STREAM_RECEIVER_H_
 #pragma once
@@ -24,34 +32,60 @@ public:
 	int start();
 	void stop();
 public:
+    /**
+     * @brief subcribe_ts_callback 订阅ts流数据.
+     *
+     * @param slot 数据流callback.
+     *
+     * @returns 订阅连接.
+     */
     boost::signals2::connection subcribe_ts_callback(const TsSignal::slot_type &slot);
 
 private:
+    /**
+     * @brief _make_m3u8_cmd 创建http的m3u8命令.
+     * @example
+     * GET /hls/test.m3u8 HTTP/1.1
+     *
+     * @param stream_url hls流地址 http://192.168.1.1:8000/hls/test.m3u8.
+     *
+     * @returns
+     */
 	std::string _make_m3u8_cmd(const std::string &stream_url="");
+
 	bool _make_m3u8_cmd(HTTPM3U8CMD &m3u8_cmd, const std::string &stream_url="");
+
 	std::string _make_down_ts_cmd(const std::string &ts_file);
+
 	bool _make_down_ts_cmd(HTTPTSCMD &ts_cmd, const std::string &ts_file);
 
 
 	int _send_m3u8_cmd(const std::string &m3u8_cmd);
+
 	int _send_ts_cmd(const std::string &ts_cmd);
 
 	bool _parser_m3u8_file(const char *m3u8_data, const int &length, M3U8Data &m3u8_data_struct);
 
 	int _push_ts_cmd(const string &ts_cmd);
+
 	bool _get_ts_cmd(HTTPTSCMD &cmd);
 
 	void m3u8Callback(char *data, const int &data_len);
+
 	void tsCallback(char *data, const int &data_len);
 
 	int _do_m3u8_task();
+
 	int _do_ts_task();
 
-	void _write_ts_file_list(const string &ts_file_name, const int &index);
-	void _write_content_to_file(char *data, const int &data_len);
+	void _write_ts_file_list(const string &out_file_name, const string &ts_file_name, const int &index);
+
+
+	void _write_content_to_file(const string &out_file_name, char *data, const int &data_len);
 private:
 	TCPClientPtr m3u8_tcp_client_ptr_;
 	TCPClientPtr ts_tcp_client_ptr_;
+
 	pugi::xml_document ts_file_doc_;
 
     TsSignal ts_send_signal_;
@@ -72,6 +106,7 @@ private:
 	URIParser uri_parser_;
 
 	int ts_file_index_;
+	int callback_times_;
     bool b_exit;/* << exit the thread.*/
 	std::string http_packet;/*<< one http packet buff with m3u8 data*/
 	std::string http_ts_packet_;/*<< one http packet buff with ts data*/

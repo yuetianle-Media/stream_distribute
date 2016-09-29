@@ -5,6 +5,7 @@
 #define E_ERROR -1
 #define E_CONN_ERROR -10
 #define E_CONN_TIMEOUT -11
+#define E_REMOTE_ADDR_EMPTY -12
 #pragma endregion NETWORK
 
 #pragma region File
@@ -16,4 +17,9 @@
 #pragma region Buffer
 #define E_BUFFER_EMPTY -2000
 #define E_BUFFER_FULL -2001
+#define E_BUFFER_LESS -2002
 #pragma endregion Buffer
+
+#pragma region DATA
+#define E_DATA_EMPTY -3000
+#pragma endregion DATA

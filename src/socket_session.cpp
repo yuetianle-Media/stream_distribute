@@ -170,7 +170,7 @@ void SocketSession::_spawn_handle_timeout(const coro_timer_ptr & ptimer, const c
 
 				if (ptimer->expires_from_now() <= chrono::milliseconds(0))
 				{
-					socket_.close(ec);
+					//socket_.close(ec);
 					if (prom != nullptr)
 					{
 						if (prom->get_future().valid())

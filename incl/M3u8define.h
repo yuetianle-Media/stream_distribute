@@ -29,7 +29,8 @@ typedef struct M3U8Struct
 	int version;
 	int current_seq;
 	double max_duration;
-	std::map<std::string, double > ts_file_list;/*<< file_name:time*/
+	//std::map<std::string, double > ts_file_list;/*<< file_name:time*/
+	std::vector<std::string> ts_file_list;/*<< file_name:time*/
 	M3U8Struct()
 		:version(3), current_seq(0), max_duration(0)
 	{
