@@ -47,8 +47,10 @@ int TCPClient::receive()
 
 int TCPClient::async_send(const char *content, const int &length)
 {
+	//vvlog_i("send cmd start");
 	if (!socket_.is_open())
 	{
+		vvlog_w("connect is error reconnectiong");
 		connect();
 	}
 	boost::system::error_code ec;
@@ -64,7 +66,15 @@ int TCPClient::async_send(const char *content, const int &length)
 		try
 		{
 			boost::system::error_code ec;
-			_send(content, length, yield[ec]);
+			int result = _send(content, length, yield[ec]);
+			if (nullptr != ptimer)
+			{
+				ptimer->cancel();
+			}
+			if (nullptr != porm)
+			{
+				porm->set_value(result);
+			}
 		}
 		catch (std::exception &e)
 		{
@@ -79,15 +89,39 @@ int TCPClient::async_send(const char *content, const int &length)
 	//_run_sync_action([]()
 	//{}, timeout_);
 	//boost::asio::async_write(socket_, boost::asio::buffer(content, length));
-	if (ec)
+	if (result != E_OK)
 	{
+		vvlog_e("send cmd end faile cmd:" << content);
 		_close();
 	}
 	else
 	{
-		cout << "send " << content << "size:" << length << std::endl;
+		vvlog_i("send cmd end success content:" << content << "size:" << length);
 	}
 	return 0;
+}
+
+int TCPClient::async_send_ext(const char *content, const int &length)
+{
+	auto self = shared_from_this();
+	spawn(strand_, [this, self, content, length](boost::asio::yield_context yield)
+	{
+		try
+		{
+			boost::system::error_code ec;
+			_send(content, length, yield[ec]);
+		}
+		catch (std::exception &e)
+		{
+			std::cout << e.what() << endl;
+
+		}
+		catch (std::error_code &e)
+		{
+			std::cout << e.value() << endl;
+		}
+	});
+	return E_OK;
 }
 
 int TCPClient::async_receive()
@@ -120,6 +154,7 @@ int TCPClient::wait_response()
 					string req((char*)buff.address(), sz);
 					//std::cout << "receive data:" << req << std::endl;
 					//std::cout << "start time:" << boost::local_time::cur
+					//vvlog_i("receive data len:" << sz);
 					data_send_signal_((char*)req.c_str(), sz);
 				}
 				else
@@ -129,7 +164,8 @@ int TCPClient::wait_response()
 			}
 			else
 			{
-				std::cout << "err:" << ec.value() << "mesg:" << ec.message() << std::endl;
+				vvlog_e("connect is brokent value:" << ec.value() << "mesg:" << ec.message());
+				//std::cout << "err:" << ec.value() << "mesg:" << ec.message() << std::endl;
 				_close();
 				break;
 			}
@@ -154,13 +190,14 @@ int TCPClient::_send(const char * content, const int & length, boost::asio::yiel
 	boost::asio::async_write(socket_, boost::asio::buffer(content, length), yield[ec]);
 	if (ec)
 	{
+		vvlog_e("send fail error msg:" << ec.message());
 		_close();
+		return E_SEND_ERROR;
 	}
-	/*else
+	else
 	{
-		cout << "send size:" << length << std::endl;
-	}*/
-	return 0;
+		return E_OK;
+	}
 }
 
 int TCPClient::_receive(const int & size, boost::asio::yield_context yield)

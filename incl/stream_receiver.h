@@ -41,7 +41,12 @@ public:
      */
     boost::signals2::connection subcribe_ts_callback(const TsSignal::slot_type &slot);
 
+
 private:
+	bool _find_http_header_start(char* &dest, char*src, const int src_length);
+	bool _find_http_header_end(char* &dest, char*src, const int src_length);
+
+	bool _find_http_line_end(char* &dest, char*src, const int src_length);
     /**
      * @brief _make_m3u8_cmd 创建http的m3u8命令.
      * @example
@@ -111,6 +116,8 @@ private:
 	std::string http_packet;/*<< one http packet buff with m3u8 data*/
 	std::string http_ts_packet_;/*<< one http packet buff with ts data*/
 	int save_content_index_;
+	std::atomic<bool> is_receive_ts_response_header_;
+	long int ts_response_content_length_;
 };
 
 typedef std::shared_ptr<StreamReceiver> StreamReceiverPtr;

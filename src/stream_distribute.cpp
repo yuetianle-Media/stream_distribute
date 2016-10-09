@@ -32,6 +32,7 @@ int main(int argc, char **argv)
 
 
 	const string stream_uri = "http://192.168.203.211:9006/hls/test.m3u8";
+	const string cctv_music = "http://58.135.196.138:8090/live/ADBD55B50F2D47bb970DCCBAF458E6C8/index.m3u8";
 	test_stream_sender(stream_uri, "224.1.1.1", 65000);
 	while (true)
 	{

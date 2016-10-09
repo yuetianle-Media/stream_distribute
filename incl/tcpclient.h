@@ -63,7 +63,9 @@ public:
      * @returns 0 for success else error code reference errcode.h.
      */
 	virtual int async_send(const char *content, const int &length)override;
-
+	/*
+	*/
+	virtual int async_send_ext(const char *content, const int &length);
     /**
      * @brief async_receive
      *

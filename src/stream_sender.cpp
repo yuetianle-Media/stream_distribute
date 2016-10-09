@@ -7,7 +7,8 @@ StreamSender::StreamSender()
 	, is_first_pcr_(false), sender_buffer_remain_size_(sizeof(send_buffer_))\
 	, tranlate_interval_time_(0.0), pcr_duration_packet_num_(0), is_exit_(false)\
 	, pop_address_(send_buffer_), ts_packet_num_(0), pcr_front_packet_num_(0)\
-	, pcr_end_packet_num_(0), ts_send_content_queue_(12800)
+	, pcr_end_packet_num_(0), ts_send_content_queue_(12800), ts_packet_queue_(32832)\
+	, push_count_(0)
 {
 	memset(send_buffer_, 0, sizeof(send_buffer_));
 }
@@ -32,8 +33,8 @@ int StreamSender::start()
 				item.second->connect();
 			}
 		}
-		//send_task_thrd_.reset(new thread(std::bind(&StreamSender::_do_send_task, this)));
-		send_task_thrd_.reset(new thread(std::bind(&StreamSender::_do_send_task_ext, this)));
+		send_task_thrd_.reset(new thread(std::bind(&StreamSender::_do_send_task, this)));
+		//send_task_thrd_.reset(new thread(std::bind(&StreamSender::_do_send_task_ext, this)));
 		return E_OK;
 	}
 }
@@ -55,11 +56,68 @@ int StreamSender::stop()
 
 void StreamSender::stream_receive_callback(char *data, const long int &data_len)
 {
+#pragma region newmethod1
+	char out_one_ts[1024] = { 0 };
+	sprintf(out_one_ts, "ts_%d.ts", ts_index_);
+	ts_index_++;
+	//_write_content_to_file(out_one_ts, data, data_len);
+	_write_content_to_file("ts.ts", data, data_len);
+	return;
+	BYTE *src_data = (BYTE*)data;
+	long int tmp_data_len = data_len;
+	int more_data_len = 0;//收到数据不是TS头的数据大小
+	if (0 < ts_remain_packet_.real_size)//有数据残留
+	{
+		while (!ts_packet_.SetPacket((BYTE*)data)||!ts_packet_.SetPacket((BYTE*)data + TS_PACKET_LENGTH_STANDARD))
+		{
+			data++;
+			tmp_data_len--;
+			more_data_len++;
+		}
+		int whole_data_len = ts_remain_packet_.real_size + more_data_len;
+		if (TS_PACKET_LENGTH_STANDARD == whole_data_len)
+		{
+			char *cpy_src = ts_remain_packet_.content + ts_remain_packet_.real_size;
+			memcpy(cpy_src, src_data, more_data_len);
+			ts_packet_queue_.push(ts_remain_packet_);
+			vvlog_i("push ts packet count:" << ++push_count_);
+		}
+		else
+		{
+			vvlog_e("one ts is not complete so ignore it");
+		}
+		memset(&ts_remain_packet_, 0, sizeof(ts_remain_packet_));//清空数据残留
+	}
+	while (data && TS_PACKET_LENGTH_STANDARD <= tmp_data_len)
+	{
+		if (ts_packet_.SetPacket((BYTE*)data))
+		{
+			TS_PACKET_CONTENT ts_data;
+			memcpy(ts_data.content, data, TS_PACKET_LENGTH_STANDARD);
+			ts_data.real_size = TS_PACKET_LENGTH_STANDARD;
+			ts_packet_queue_.push(ts_data);
+			//vvlog_i("push ts packet count:" << ++push_count_);
+			data = data + TS_PACKET_LENGTH_STANDARD;
+			tmp_data_len -= TS_PACKET_LENGTH_STANDARD;
+		}
+		else
+		{
+			vvlog_e("ts packet error!!!");
+		}
+	}
+	if (data && 0 < tmp_data_len);
+	{
+		memcpy(ts_remain_packet_.content, data, tmp_data_len);
+		ts_remain_packet_.real_size = tmp_data_len;
+	}
+
+#pragma endregion newmethod1
+#ifdef TEST
 #pragma region
 
 	//std::cout << "tsdata index:" << ts_index_ << "data_len" << data_len << std::endl;
 	fstream out_file;
-	//fstream out_one_file;
+	fstream out_one_file;
 	char out_ts[1024] = { 0 };
 	//char out_one_ts[1024] = { 0 };
 	//sprintf(out_one_ts, "ts_%d.ts", ts_index_);
@@ -72,20 +130,23 @@ void StreamSender::stream_receive_callback(char *data, const long int &data_len)
 	//out_one_file.write(data, data_len);
 	//out_one_file.close();
 	ts_index_++;
-	return;
+	//return;
 #pragma endregion writefile
 #pragma region NewMethod
-	BYTE* tmp_data = (BYTE*)data;
+	BYTE* data = (BYTE*)data;
 	long int tmp_data_length = data_len;
-	while (tmp_data && TS_PACKET_LENGTH_STANDARD <= tmp_data_length)
+	vvlog_i("receive data_len:" << data_len << "buffer len" << sender_buffer_.get_data_length());
+	while (data && TS_PACKET_LENGTH_STANDARD <= tmp_data_length)
 	{
-		if (ts_packet_.SetPacket((BYTE*)tmp_data))
+		if (ts_packet_.SetPacket((BYTE*)data))//是TS包头
 		{
-			sender_buffer_.push_to_buffer((char*)tmp_data, TS_PACKET_LENGTH_STANDARD);
+			sender_buffer_.push_to_buffer((char*)data, TS_PACKET_LENGTH_STANDARD);
 			ts_packet_num_++;
 			WORD pid = ts_packet_.Get_PID();
 			if (ts_packet_.Get_PCR_flag())
 			{
+				vvlog_i("ts pcr packet num:" << ts_packet_num_\
+<< "pcr_front:" << pcr_front_ << "pcr_end:" << pcr_end_);
 				if (!is_first_pcr_)
 				{
 					pcr_front_ = pcr_end_ = ts_packet_.Get_PCR();
@@ -94,7 +155,7 @@ void StreamSender::stream_receive_callback(char *data, const long int &data_len)
 				}
 				else//将数据推送到队列当中
 				{
-					sender_buffer_.push_to_buffer((char*)tmp_data, TS_PACKET_LENGTH_STANDARD);
+					//sender_buffer_.push_to_buffer((char*)tmp_data, TS_PACKET_LENGTH_STANDARD);
 					pcr_front_ = pcr_end_;
 					pcr_end_ = ts_packet_.Get_PCR();
 					if (pcr_end_ < pcr_front_)
@@ -108,12 +169,15 @@ void StreamSender::stream_receive_callback(char *data, const long int &data_len)
 					tranlate_interval_time_ = TS_SEND_SIZE *8/ (tranlate_rate_ * 1000) - 1;//发送188*7需要的时间
 					if (0 < pcr_front_packet_num_)
 					{
+						int packet_num = pcr_front_packet_num_ + pcr_duration_packet_num_;
+						vvlog_i("push send data packetnum:" << packet_num << "bufferlen:" << sender_buffer_.get_data_length());
 						_push_data_to_ts_queue(sender_buffer_.get_data()\
 							, pcr_front_packet_num_ + pcr_duration_packet_num_
 							, tranlate_interval_time_);
 					}
 					else
 					{
+						vvlog_i("push send data packetnum:" << pcr_duration_packet_num_<< "bufferlen:" << sender_buffer_.get_data_length());
 						_push_data_to_ts_queue(sender_buffer_.get_data()\
 							, pcr_duration_packet_num_\
 							, tranlate_interval_time_);
@@ -121,24 +185,28 @@ void StreamSender::stream_receive_callback(char *data, const long int &data_len)
 					sender_buffer_.reset_buffer();
 					pcr_front_packet_num_ = 0;
 					pcr_end_packet_num_ = 0;
+					pcr_duration_packet_num_ = 0;
 					ts_packet_num_ = 0;
-
-						
 				}
 			}
-			tmp_data = tmp_data + TS_PACKET_LENGTH_STANDARD;
+			data = data + TS_PACKET_LENGTH_STANDARD;
 			tmp_data_length -= TS_PACKET_LENGTH_STANDARD;
 		}
 		else
 		{
-			sender_buffer_.push_to_buffer((char*)tmp_data, 1);
+			sender_buffer_.push_to_buffer((char*)data, 1);
 			tmp_data_length--;
-			tmp_data++;
+			data++;
 		}
 	}
 	//the last data is less than 188
-	if (tmp_data && 0 < tmp_data_length)
-		if (ts_packet_.SetPacket((BYTE*)tmp_data))//是TS数据
+	if (data && 0 < tmp_data_length)
+	{
+		vvlog_i("remain data len:" << tmp_data_length << "data:" << data);
+		if (ts_packet_.SetPacket((BYTE*)data))//是TS数据
+		{
+			sender_buffer_.push_to_buffer((char*)data, tmp_data_length);
+			ts_packet_num_++;
 			if (ts_packet_.Get_PCR_flag())
 				if (!is_first_pcr_)
 				{
@@ -161,25 +229,41 @@ void StreamSender::stream_receive_callback(char *data, const long int &data_len)
 					tranlate_interval_time_ = TS_SEND_SIZE *8/ (tranlate_rate_ * 1000) - 1;//发送188*7需要的时间
 					if (0 < pcr_front_packet_num_)
 					{
+						int packet_num = pcr_front_packet_num_ + pcr_duration_packet_num_;
+						vvlog_i("push send data packetnum:" << packet_num << "bufferlen:" << sender_buffer_.get_data_length());
 						_push_data_to_ts_queue(sender_buffer_.get_data()\
 							, pcr_front_packet_num_ + pcr_duration_packet_num_
 							, tranlate_interval_time_);
 					}
 					else
 					{
+						vvlog_i("push send data packetnum:" << pcr_duration_packet_num_<< "bufferlen:" << sender_buffer_.get_data_length());
 						_push_data_to_ts_queue(sender_buffer_.get_data()\
 							, pcr_duration_packet_num_\
 							, tranlate_interval_time_);
 					}
 					sender_buffer_.reset_buffer();
-					pcr_front_packet_num_ = 1;//有一包不完整的还没有推送
+					pcr_front_packet_num_ = 0;//有一包不完整的还没有推送
 					pcr_end_packet_num_ = 0;
+					pcr_duration_packet_num_ = 0;
 					ts_packet_num_ = 0;
 				}
-			sender_buffer_.push_to_buffer((char*)tmp_data, tmp_data_length);
+		}
+		else
+		{
+			vvlog_e("remain data is not ts data ignore it!!!");
+		}
+	}
+	else
+	{
+		assert(true);
+	}
 
 #pragma endregion NewMethod
+#else
 	//stream_buffer_.pushToBuffer(data, data_len);
+#endif
+	
 }
 
 bool StreamSender::add_sender_address(const string &remote_addr, const int &port)
@@ -242,6 +326,19 @@ bool StreamSender::del_sender_address(const string &remote_addr, const int &port
 
 void StreamSender::_do_send_task()
 {
+	while (1)
+	{
+		TS_PACKET_CONTENT ts_data;
+		if (ts_packet_queue_.empty())
+			this_thread::sleep_for(chrono::microseconds(1));
+		if (!ts_packet_queue_.is_lock_free())
+			vvlog_e("queue is not lcok free!!!");
+		while (ts_packet_queue_.pop(ts_data))
+		{
+			_write_content_to_file("ts_translate.ts", ts_data.content, ts_data.real_size);
+		}
+	}
+	return;
 #pragma region test
 	/*while (1)
 	{
@@ -331,9 +428,23 @@ void StreamSender::_do_send_task_ext()
 		TS_SEND_CONTENT ts_send_content;
 		if (ts_send_content_queue_.empty())
 			this_thread::sleep_for(chrono::microseconds(1));
+		if (!ts_send_content_queue_.is_lock_free())
+		{
+			vvlog_e("queue is not lockfree!!!!");
+		}
 		while (ts_send_content_queue_.pop(ts_send_content))
-			for (auto udp_client_ptr : sender_clients_list_)
-				udp_sender_ptr->write(ts_send_content.content, ts_send_content.real_size, ts_send_content.need_time);
+		{
+			for (auto &udp_client_ptr : sender_clients_list_)
+			{
+				//cout << "dataLen:" << ts_send_content.real_size << std::endl;
+				vvlog_i("start send data datalen:" << ts_send_content.real_size);
+				if (udp_client_ptr.second)
+					_write_content_to_file("ts_translate.ts"\
+						, ts_send_content.content\
+						, ts_send_content.real_size);
+					//udp_client_ptr.second->write(ts_send_content.content, ts_send_content.real_size, ts_send_content.need_time);
+			}
+		}
 	}
 }
 
@@ -382,6 +493,16 @@ void StreamSender::_do_send_ts_data(UDPClientPtr udp_client, char* data, const l
 		udp_client->write(data, TS_SEND_SIZE, time);
 	}
 
+}
+
+void StreamSender::_write_content_to_file(const string &file_name, const char* data, const int &length)
+{
+	fstream out_file;
+	char out_ts[1024] = { 0 };
+	sprintf(out_ts, file_name.data());
+	out_file.open(out_ts, ios::out | ios::binary | ios::app);
+	out_file.write(data, length);
+	out_file.close();
 }
 
 void StreamSender::_parse_ts_data()
@@ -451,12 +572,12 @@ void StreamSender::_push_data_to_ts_queue(char*data, const int &ts_packet_num, c
 		ts_send_content.need_time = send_time;
 		ts_send_content.real_size = TS_SEND_SIZE;
 		ts_send_content_queue_.push(ts_send_content);
-		tmp_packet_num--;
+		tmp_packet_num -=7;
 		data = data + TS_SEND_SIZE;
 	}
 	if (0 < tmp_packet_num)
 	{
-		memcpy(ts_send_content.content, tmp_data, tmp_packet_num);
+		memcpy(ts_send_content.content, tmp_data, tmp_packet_num*TS_PACKET_LENGTH_STANDARD);
 		ts_send_content.need_time = (tmp_packet_num*TS_PACKET_LENGTH_STANDARD*send_time) / (TS_SEND_SIZE);
 		ts_send_content.real_size = tmp_packet_num*TS_PACKET_LENGTH_STANDARD;
 		ts_send_content_queue_.push(ts_send_content);

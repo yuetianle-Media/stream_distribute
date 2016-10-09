@@ -21,26 +21,26 @@ UDPClient::~UDPClient()
 int UDPClient::write(char *data, const int &data_len)
 {
 	auto self = shared_from_this();
-	auto write_coro_timer = make_shared<coro_timer>(*io_svt_ptr_);
+	//auto write_coro_timer = make_shared<coro_timer>(*io_svt_ptr_);
 	if (data_len < segment_size_) 
 	{
-		boost::asio::spawn(strand_, [self, this, write_coro_timer, data, data_len](boost::asio::yield_context yield)
-		{
-			boost::system::error_code ec;
-			write_coro_timer->async_wait(yield[ec]);
-			if (ec)
-			{
-				//std::chrono::steady_clock::duration time_reamin = write_coro_timer->expires_from_now();
-				//this_thread::sleep_for(std::chrono::milliseconds(time_reamin));
-				return ec;
-			}
-			else
-			{
-				if (write_coro_timer->expires_from_now() < std::chrono::milliseconds(0))
-				{
-				}
-			}
-		});
+		//boost::asio::spawn(strand_, [self, this, write_coro_timer, data, data_len](boost::asio::yield_context yield)
+		//{
+		//	boost::system::error_code ec;
+		//	write_coro_timer->async_wait(yield[ec]);
+		//	if (ec)
+		//	{
+		//		//std::chrono::steady_clock::duration time_reamin = write_coro_timer->expires_from_now();
+		//		//this_thread::sleep_for(std::chrono::milliseconds(time_reamin));
+		//		return ec;
+		//	}
+		//	else
+		//	{
+		//		if (write_coro_timer->expires_from_now() < std::chrono::milliseconds(0))
+		//		{
+		//		}
+		//	}
+		//});
 		boost::asio::spawn(strand_, [self, this, data, data_len](boost::asio::yield_context yield)
 		{
 			boost::system::error_code ec;

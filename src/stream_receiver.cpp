@@ -3,9 +3,10 @@
 
 
 StreamReceiver::StreamReceiver(const string &url)
-	:ts_task_list_(10000), uri_parser_(url), play_stream_duration_(2)\
+	:ts_task_list_(10000), uri_parser_(url), play_stream_duration_(5)\
 	, m3u8_thrd_ptr_(nullptr), ts_thrd_ptr_(nullptr), b_exit(false)\
-	, ts_file_index_(0), callback_times_(0), save_content_index_(0)
+	, ts_file_index_(0), callback_times_(0), save_content_index_(0)\
+	, is_receive_ts_response_header_(false), ts_response_content_length_(0)
 {
 	play_stream_ = _make_m3u8_cmd(url);
 	m3u8_tcp_client_ptr_	= std::make_shared<TCPClient>(uri_parser_.host(), uri_parser_.port(), 5000);
@@ -22,8 +23,10 @@ int StreamReceiver::start()
 {
 	if (nullptr != m3u8_thrd_ptr_ && nullptr != ts_thrd_ptr_)
 	{
-		std::cout << "m3u8 and ts thread is started m3u8 thread id:" << m3u8_thrd_ptr_->get_id()\
+		//std::cout << "m3u8 and ts thread is started m3u8 thread id:" << m3u8_thrd_ptr_->get_id()\
 			<< "ts thread id:" << ts_thrd_ptr_->get_id() << endl;
+		vvlog_w("m3u8 and ts thread is started m3u8 thread id:" << m3u8_thrd_ptr_->get_id()\
+			<< "ts thread id:" << ts_thrd_ptr_->get_id());
 		return E_OK;
 	}
     if (nullptr != m3u8_tcp_client_ptr_)
@@ -31,8 +34,8 @@ int StreamReceiver::start()
         m3u8_conn =  m3u8_tcp_client_ptr_->subcribe_data_callback(boost::bind(&StreamReceiver::m3u8Callback, this, _1, _2));
 		//m3u8_tcp_client_ptr_->send(play_stream_.data(), play_stream_.length());
 		m3u8_tcp_client_ptr_->connect();
-		m3u8_tcp_client_ptr_->async_send(play_stream_.data(), play_stream_.length());
 		m3u8_tcp_client_ptr_->wait_response();
+		m3u8_tcp_client_ptr_->async_send(play_stream_.data(), play_stream_.length());
     }
     if (nullptr != ts_tcp_client_ptr_)
     {
@@ -41,7 +44,7 @@ int StreamReceiver::start()
 		ts_tcp_client_ptr_->wait_response();
     }
 	m3u8_thrd_ptr_.reset(new std::thread(std::bind(&StreamReceiver::_do_m3u8_task, this)));
-	//ts_thrd_ptr_.reset(new std::thread(std::bind(&StreamReceiver::_do_ts_task, this)));
+	ts_thrd_ptr_.reset(new std::thread(std::bind(&StreamReceiver::_do_ts_task, this)));
     if (nullptr != m3u8_thrd_ptr_)
     {
         m3u8_thrd_ptr_->detach();
@@ -73,6 +76,62 @@ void StreamReceiver::stop()
 boost::signals2::connection StreamReceiver::subcribe_ts_callback(const TsSignal::slot_type &slot)
 {
 	return ts_send_signal_.connect(slot);
+}
+
+bool StreamReceiver::_find_http_header_start(char* &dest, char*src, const int src_length)
+{
+	char *tmp_src = src;
+	int tmp_length = src_length;
+	while (tmp_src && 4 <= tmp_length)
+	{
+		if ('H' == *tmp_src && 'T' == *(tmp_src + 1) && 'T' == *(tmp_src + 2) && 'P' == *(tmp_src + 3))//"HTTP"
+		{
+			dest = tmp_src;
+			return true;
+		}
+		if ('h' == *tmp_src && 't' == *(tmp_src + 1) && 't'== *(tmp_src + 2) && 'p' == *(tmp_src + 3))//"http"
+		{
+			dest = tmp_src;
+			return true;
+		}
+		tmp_src++;
+		tmp_length--;
+	}
+	return false;
+}
+
+bool StreamReceiver::_find_http_header_end(char* &dest, char*src, const int src_length)
+{
+	char *tmp_src = src;
+	int tmp_length = src_length;
+	while (tmp_src && 4 <= tmp_length)
+	{
+		if ('\r'== *tmp_src && '\n'== *(tmp_src + 1) && '\r'== *(tmp_src + 2) && '\n' == *(tmp_src + 3))
+		{
+			dest = tmp_src+4;
+			return true;
+		}
+		tmp_src++;
+		tmp_length--;
+	}
+	return false;
+}
+
+bool StreamReceiver::_find_http_line_end(char* &dest, char*src, const int src_length)
+{
+	char *tmp_src = src;
+	int tmp_length = src_length;
+	while (tmp_src && 4 <= tmp_length)
+	{
+		if ('\r'== *tmp_src && '\n'== *(tmp_src + 1))
+		{
+			dest = tmp_src+2;
+			return true;
+		}
+		tmp_src++;
+		tmp_length--;
+	}
+	return false;
 }
 
 std::string StreamReceiver::_make_m3u8_cmd(const string &stream_url/*=0*/)
@@ -168,7 +227,10 @@ int StreamReceiver::_send_ts_cmd(const string &ts_cmd)
 {
     if (nullptr != ts_tcp_client_ptr_)
     {
+		vvlog_i("send ts start cmd:" << ts_cmd);
+		//ts_tcp_client_ptr_->async_send_ext(ts_cmd.data(), ts_cmd.length());
         ts_tcp_client_ptr_->async_send(ts_cmd.data(), ts_cmd.length());
+		vvlog_i("send ts end.");
     }
 	return 0;
 }
@@ -214,9 +276,9 @@ int StreamReceiver::_push_ts_cmd(const string &ts_cmd_str)
 	std::map<string, int>::iterator iter = ts_all_task_map_.find(ts_cmd_str);
 	if (iter == ts_all_task_map_.end())//此任务没有添加过
 	{
+		vvlog_i("push ts task:" << ts_cmd_str);
 		_write_ts_file_list("task.xml", ts_cmd_str, 0);
 		ts_all_task_map_.insert(std::make_pair(ts_cmd_str, ts_file_index_++));
-		//vvlog_i("dd");
 		ts_task_list_.push(ts_cmd);
 	}
 	return 0;
@@ -233,7 +295,7 @@ void StreamReceiver::m3u8Callback(char *data, const int &data_len)
 	//sprintf(http_out_file_name, "http_out_file_%d.ts", save_content_index_);
 	//_write_content_to_file(http_out_file_name, data, data_len);
 	//std::cout << "data:" << data << "data_len:" << data_len << endl;
-	
+	//vvlog_i("m3u8 callback data:" <<data << "datalen:"<< data_len);
 	if (100 < ts_all_task_map_.size())//当数据过多时删除一些旧数据
 	{
 	}
@@ -254,6 +316,7 @@ void StreamReceiver::m3u8Callback(char *data, const int &data_len)
 		}
 		if (http_code != 200)
 		{
+			vvlog_w("m3u8 callback error:" << http_code);
 			http_packet.clear();
 			return;
 		}
@@ -280,7 +343,7 @@ void StreamReceiver::m3u8Callback(char *data, const int &data_len)
 					//_write_ts_file_list(out_file_name, item, file_index);
 					file_index++;
 				}
-				callback_times_++;
+				//callback_times_++;
 				http_packet = http_packet.substr(one_packet_length\
 					, http_packet.length() - one_packet_length);//去除一整包http
 				return;
@@ -326,11 +389,99 @@ void StreamReceiver::m3u8Callback(char *data, const int &data_len)
 
 void StreamReceiver::tsCallback(char *data, const int &data_len)
 {
-	char http_out_file_name[1024] = { 0 };
-	sprintf(http_out_file_name, "http_out_file_%d.txt", save_content_index_);
-	_write_content_to_file(http_out_file_name, data, data_len);
+#pragma region new
+	_write_content_to_file("ts_callbcak.dat", data, data_len);
+	char *http_header_start = nullptr;
+	char *http_header_end = nullptr;
+	int send_length = 0;
+	vvlog_i("ts_callback start length:" << data_len);
+	_find_http_header_start(http_header_start, data, data_len);
+	_find_http_header_end(http_header_end, data, data_len);
+	if (http_header_start)
+	{
+		int head_length = http_header_start - data;
+		int http_code = 0;
+		char *http_first_line = nullptr;
+		if (_find_http_line_end(http_first_line, data, data_len))
+		{
+			char first_line_content[1024] = { 0 };
+			if (http_first_line)
+			{
+				int first_line_length = http_first_line - http_header_start;
+				if (0 < first_line_length)
+					memcpy(first_line_content, http_header_start, first_line_length);
+			}
+			if (0 < strlen(first_line_content))
+			{
+				RegexTextFinder regex_finder;
+				if (regex_finder.find(first_line_content, "(.+?) (\\d+) (.+$)"))
+				{
+					http_code = atoi(regex_finder[2].c_str());
+				}
+			}
+			if (200 != http_code)//如果http请求失败不进行数据传输
+			{
+				return;
+			}
+		}
+		if (0 < head_length)
+		{
+			send_length = head_length;
+			if (0 < send_length)
+			{
+				ts_send_signal_(data, head_length);
+				vvlog_i("ts_callback send data len:" << send_length);
+			}
+		}
+		if (http_header_end)
+		{
+			int http_header_length = http_header_end - data;
+			send_length = data_len - http_header_length;
+			if (0 < send_length)
+			{
+				ts_send_signal_(data + http_header_length, send_length);
+				vvlog_i("ts_callback send data len:" << send_length);
+			}
+		}
+		else
+		{
+			vvlog_w("only find header start not header end!!!");
+		}
+	}
+	else
+	{
+		if (http_header_end)
+		{
+			int http_end_length = http_header_end - data;
+			send_length = data_len - http_end_length;
+			if (0 < send_length)
+			{
+				ts_send_signal_(data + http_end_length, send_length);
+				vvlog_i("ts_callback send data len:" << send_length);
+			}
+		}
+		else
+		{
+			send_length = data_len;
+			if (0 < send_length)
+			{
+				ts_send_signal_(data, data_len);
+				vvlog_i("ts_callback send data len:" << send_length);
+			}
+		}
+	}
+	vvlog_i("ts_callback end");
+	return;
+#pragma endregion new
+	vvlog_i("ts callback start datalen:" << data_len);
+	//char http_out_file_name[1024] = { 0 };
+	//sprintf(http_out_file_name, "http_out_file_%d.txt", save_content_index_);
+	//_write_content_to_file(http_out_file_name, data, data_len);
 	if (data && 0 < data_len)
 	{
+		callback_times_++;
+		char out_file_name[1024] = { 0 };
+		sprintf(out_file_name, "send_ts_%d.ts", callback_times_);
 		char *end_char = strstr(data, (char*)HTTP_HEAD_END.c_str());
 		if (nullptr != end_char)
 		{
@@ -348,7 +499,8 @@ void StreamReceiver::tsCallback(char *data, const int &data_len)
 			}
 			if (http_code != 200)
 			{
-				cout << "ts call callback error len:" << data_len << "data:" << data << std::endl;
+				//cout << "ts call callback error len:" << data_len << "data:" << data << std::endl;
+				vvlog_w("ts call callback error len:" << data_len << "data:" << data);
 				http_ts_packet_.clear();
 				return;
 			}
@@ -356,33 +508,41 @@ void StreamReceiver::tsCallback(char *data, const int &data_len)
 			int ts_send_size = data_len - http_content_length;
 			if (0 < ts_send_size)
 			{
-				cout << "send ts data size:" << ts_send_size << std::endl;
+				//cout << "send ts data size:" << ts_send_size << std::endl;
+				vvlog_i("send ts data size:" << ts_send_size);
+				_write_content_to_file(out_file_name, end_char + 4, ts_send_size);
 				ts_send_signal_(end_char+4, ts_send_size);
 			}
 			else
 			{
-				cout << "end_index ts_send_size:" << ts_send_size << std::endl;
+				vvlog_i("end_index ts_send_size:" << ts_send_size);
+				//cout << "end_index ts_send_size:" << ts_send_size << std::endl;
 			}
 			http_ts_packet_.clear();
 		}
 		else//不是http头
 		{
-			cout << "send ts data size:" << data_len << std::endl;
+			vvlog_i("send ts data size:" << data_len);
+			//cout << "send ts data size:" << data_len << std::endl;
+			_write_content_to_file(out_file_name, data, data_len);
 			ts_send_signal_(data, data_len);
 		}
 	}
+	vvlog_i("ts callback end datalen:" << data_len);
 }
 
 int StreamReceiver::_do_m3u8_task()
 {
     while (1) {
 		if (0 < play_stream_.length())
+		{
             _send_m3u8_cmd(play_stream_);
+			std::this_thread::sleep_for(std::chrono::seconds(play_stream_duration_));
+		}
         if (b_exit)
         {
             break;
         }
-        std::this_thread::sleep_for(std::chrono::seconds(play_stream_duration_));
     }
 	return 0;
 }
@@ -397,7 +557,7 @@ int StreamReceiver::_do_ts_task()
             if (0 < ts_cmd.length())
                 _send_ts_cmd(ts_cmd);
 		}
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        //std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 	return 0;
 

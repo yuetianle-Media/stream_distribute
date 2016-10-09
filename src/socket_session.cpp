@@ -27,6 +27,40 @@ SocketSession::~SocketSession()
 {
 }
 
+bool SocketSession::resize_recv_size(const long int &recv_size)
+{
+	boost::system::error_code ec;
+	boost::asio::ip::tcp::socket::receive_buffer_size bz(0);
+	socket_.get_option(bz, ec);
+	if (!ec)
+	{
+		socket_.set_option(boost::asio::ip::tcp::socket::receive_buffer_size(recv_size),ec);
+		if (!ec)
+		{
+			socket_.get_option(bz, ec);
+			return true;
+		}
+	}
+	return false;
+}
+
+bool SocketSession::resize_send_size(const long int &send_size)
+{
+	boost::system::error_code ec;
+	boost::asio::ip::tcp::socket::send_buffer_size bz(0);
+	socket_.get_option(bz, ec);
+	if (!ec)
+	{
+		socket_.set_option(boost::asio::ip::tcp::socket::send_buffer_size(send_size), ec);
+		if (!ec)
+		{
+			socket_.get_option(bz, ec);
+			return true;
+		}
+	}
+	return false;
+}
+
 int SocketSession::_connect_ex(const string & content)
 {
 	auto self = shared_from_this();
@@ -43,13 +77,14 @@ int SocketSession::_connect_ex(const string & content)
 		}
 	}, timeout_);
 
-	cout << "connect = " << (result == 0) << endl;
-
+	if (E_OK == result)
+		vvlog_i("connect success local address:" << socket_.local_endpoint().address().to_string()\
+<< "port:" << socket_.local_endpoint().port());
 	if (socket_.is_open())
 	{
 		//resize_recv_buffer(m_recv_buff_size);
 		//resize_send_buffer(m_send_buff_size);
-		//set_no_delay(true);
+		set_no_delay(true);
 	}
 	return result;
 }
@@ -134,6 +169,7 @@ int SocketSession::_run_sync_action(coro_action operation_action, const int & ti
 		{
 			try
 			{
+				vvlog_w("time out");
 				if (nullptr != prom)
 				{
 					prom->set_value(E_CONN_TIMEOUT);

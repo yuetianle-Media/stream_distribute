@@ -15,7 +15,7 @@ public:
 private:
 	char data_[188 * 7 * 200];
 	char *cur_data_curosor_;
-	atomic<int> cur_data_len_;
-	atomic<int> remain_data_len_;
+	atomic<long int> cur_data_len_;
+	atomic<long int> remain_data_len_;
 };
 

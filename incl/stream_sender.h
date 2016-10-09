@@ -22,12 +22,25 @@ typedef struct TS_SEND_CONTENT
 		memset(content, 0, sizeof(TS_SEND_SIZE));
 	}
 }TSSENDCONTENT;
+
+typedef struct TSPACKETCONTENT
+{
+	char content[TS_PACKET_LENGTH_STANDARD];
+	int real_size;
+	TSPACKETCONTENT()
+	{
+		memset(content, 0, sizeof(TSPACKETCONTENT));
+	}
+}TS_PACKET_CONTENT;//一个ts包
+
 typedef struct TS_BASIC_CONTENT
 {
 	int start_index;
 	int packet_num;
 };
-class StreamSender
+
+//#define TEST 1
+class StreamSender :public std::enable_shared_from_this<StreamSender>
 {
 public:
 	StreamSender();
@@ -41,6 +54,7 @@ public:
 	void stream_receive_callback(char *data, const long int &data_len);
 private:
 
+	void _write_content_to_file(const string &file_name, const char* data, const int &length);
 	void _parse_ts_data();
 	//void _parse_ts_data(char* data, const int data_len);
 
@@ -73,6 +87,10 @@ private:
 	char *pop_address_;
 	StreamSenderBuffer sender_buffer_;
 	boost::lockfree::queue<TSSENDCONTENT, boost::lockfree::fixed_sized<true>> ts_send_content_queue_;
+
+	boost::lockfree::queue<TS_PACKET_CONTENT, boost::lockfree::fixed_sized<true>> ts_packet_queue_;//32K数据缓存大小
+	TS_PACKET_CONTENT ts_remain_packet_;
+	int push_count_;
 };
 
 typedef std::shared_ptr<StreamSender> StreamSenderPtr;

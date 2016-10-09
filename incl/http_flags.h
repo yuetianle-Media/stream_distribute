@@ -4,6 +4,7 @@
 #include <string>
 const std::string HTTP_HEAD_END = "\r\n\r\n";
 const std::string HTTP_CONTENT_LENGTH = "Content-Length";
+const std::string HTTP_RESPONSE_START_FLAG = "HTTP";
 
 typedef enum HttpCMD
 {
