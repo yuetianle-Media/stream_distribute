@@ -5,32 +5,35 @@
 URIParser::URIParser(const string &uri)
 	:port_(-1), is_ready_(false), uri_(uri)
 {
-	if (regex_finder_.find(uri, "(.+?)://(.+?)/(.+)"))
+	if (!uri.empty())
 	{
-		protocol_ = regex_finder_[1];
-		string endpoint = regex_finder_[2];
-		string path = regex_finder_[3];
-		if (string::npos != path.find("?"))
+		if (regex_finder_.find(uri, "(.+?)://(.+?)/(.+)"))
 		{
-			if (regex_finder_.find(path, "(.+?)\\?(.+$)"))
+			protocol_ = regex_finder_[1];
+			string endpoint = regex_finder_[2];
+			string path = regex_finder_[3];
+			if (string::npos != path.find("?"))
 			{
-				resource_ = regex_finder_[1];
-				params_str_ = regex_finder_[2];
+				if (regex_finder_.find(path, "(.+?)\\?(.+$)"))
+				{
+					resource_ = regex_finder_[1];
+					params_str_ = regex_finder_[2];
+				}
 			}
-		}
-		else
-		{
-			resource_ = path;
-		}
-		if (regex_finder_.find(endpoint, "(.+?)@(.+$)"))
-		{
-			string auth = regex_finder_[1];
-			_parser_user(auth);
-			endpoint = regex_finder_[2];
-		}
-		if (_parser_endpoint(endpoint))
-		{
-			is_ready_ = true;
+			else
+			{
+				resource_ = path;
+			}
+			if (regex_finder_.find(endpoint, "(.+?)@(.+$)"))
+			{
+				string auth = regex_finder_[1];
+				_parser_user(auth);
+				endpoint = regex_finder_[2];
+			}
+			if (_parser_endpoint(endpoint))
+			{
+				is_ready_ = true;
+			}
 		}
 	}
 }

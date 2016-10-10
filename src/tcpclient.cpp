@@ -94,10 +94,10 @@ int TCPClient::async_send(const char *content, const int &length)
 		vvlog_e("send cmd end faile cmd:" << content);
 		_close();
 	}
-	else
-	{
-		vvlog_i("send cmd end success content:" << content << "size:" << length);
-	}
+	//else
+	//{
+	//	vvlog_i("send cmd end success content:" << content << "size:" << length);
+	//}
 	return 0;
 }
 

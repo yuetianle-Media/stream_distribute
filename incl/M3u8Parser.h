@@ -1,5 +1,6 @@
 #pragma once
 #include "m3u8define.h"
+#include "pre_regex.h"
 #include <map>
 #include <vector>
 #include <iostream>
@@ -108,6 +109,7 @@ union ContentType
 typedef struct M3u8BaseData
 {
 	int media_sequence;
+	int target_duration;//unit:s
 	bool is_variant;
 	bool is_endlist;
 	bool is_i_frame_only;
@@ -120,7 +122,7 @@ typedef struct M3u8BaseData
 	M3u8BaseData()
 		:media_sequence(0), is_variant(false)\
 		, is_endlist(false), is_i_frame_only(false)\
-		, is_independent_segments(false)
+		, is_independent_segments(false), target_duration(0)
 	{
 
 	}

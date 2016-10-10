@@ -18,3 +18,19 @@ void test_stream_receive(const std::string &url)
 		this_thread::sleep_for(std::chrono::seconds(5));
 	}
 };
+
+void test_stream_ts_callback(const std::string &ts_file_name)
+{
+	StreamReceiver stream_receiver("");
+	fstream in_stream;
+	boost::filesystem::path ts_path(ts_file_name);
+	if (boost::filesystem::exists(ts_path))
+	{
+		in_stream.open(ts_file_name.c_str(), ios::in|ios::binary);
+		char ts_data[32768] = { 0 };
+		if (in_stream.read(ts_data, 32768))
+		{
+			stream_receiver.tsCallback(ts_data, 32768);
+		}
+	}
+}

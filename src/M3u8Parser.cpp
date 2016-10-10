@@ -16,7 +16,11 @@ M3u8Parser::M3u8Parser(const std::string &content)
 		}
 		else if (v_str_is_start_with(item, M3U8_EXT_X_TARGETDURAION))
 		{
-			_parse_simple_parameter(item, "string");
+			RegexTextFinder finder;
+			if (finder.find(item, "#(.+?):(.+$)"))
+			{
+				m3u8_data_.target_duration = atoi(finder[2].c_str());
+			}
 		}
 		else if (v_str_is_start_with(item, M3U8_EXT_X_MEDIDA_SEQUENCE))
 		{
@@ -134,6 +138,11 @@ bool M3u8Parser::get_ts_file_list(std::vector<std::string> &ts_file_list)
 	{
 		return false;
 	}
+}
+
+float M3u8Parser::get_max_duration()
+{
+	return m3u8_data_.target_duration;
 }
 
 //int M3u8Parser::_parse_key(const std::string &content)

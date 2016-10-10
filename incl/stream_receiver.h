@@ -42,6 +42,7 @@ public:
     boost::signals2::connection subcribe_ts_callback(const TsSignal::slot_type &slot);
 
 
+	void tsCallback(char *data, const int &data_len);
 private:
 	bool _find_http_header_start(char* &dest, char*src, const int src_length);
 	bool _find_http_header_end(char* &dest, char*src, const int src_length);
@@ -77,7 +78,7 @@ private:
 
 	void m3u8Callback(char *data, const int &data_len);
 
-	void tsCallback(char *data, const int &data_len);
+	//void tsCallback(char *data, const int &data_len);
 
 	int _do_m3u8_task();
 
@@ -111,7 +112,7 @@ private:
 	URIParser uri_parser_;
 
 	int ts_file_index_;
-	int callback_times_;
+	std::atomic<int> callback_times_;
     bool b_exit;/* << exit the thread.*/
 	std::string http_packet;/*<< one http packet buff with m3u8 data*/
 	std::string http_ts_packet_;/*<< one http packet buff with ts data*/

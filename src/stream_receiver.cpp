@@ -9,8 +9,11 @@ StreamReceiver::StreamReceiver(const string &url)
 	, is_receive_ts_response_header_(false), ts_response_content_length_(0)
 {
 	play_stream_ = _make_m3u8_cmd(url);
-	m3u8_tcp_client_ptr_	= std::make_shared<TCPClient>(uri_parser_.host(), uri_parser_.port(), 5000);
-	ts_tcp_client_ptr_		= std::make_shared<TCPClient>(uri_parser_.host(), uri_parser_.port(), 5000);
+	if (uri_parser_.is_ready())
+	{
+		m3u8_tcp_client_ptr_	= std::make_shared<TCPClient>(uri_parser_.host(), uri_parser_.port(), 5000);
+		ts_tcp_client_ptr_		= std::make_shared<TCPClient>(uri_parser_.host(), uri_parser_.port(), 5000);
+	}
 
 }
 
@@ -89,11 +92,11 @@ bool StreamReceiver::_find_http_header_start(char* &dest, char*src, const int sr
 			dest = tmp_src;
 			return true;
 		}
-		if ('h' == *tmp_src && 't' == *(tmp_src + 1) && 't'== *(tmp_src + 2) && 'p' == *(tmp_src + 3))//"http"
-		{
-			dest = tmp_src;
-			return true;
-		}
+		//if ('h' == *tmp_src && 't' == *(tmp_src + 1) && 't'== *(tmp_src + 2) && 'p' == *(tmp_src + 3))//"http"
+		//{
+		//	dest = tmp_src;
+		//	return true;
+		//}
 		tmp_src++;
 		tmp_length--;
 	}
@@ -259,6 +262,7 @@ bool StreamReceiver::_parser_m3u8_file(const char *m3u8_data, const int &length,
 	M3u8Parser parser(data);
 	std::vector<std::string> file_list;
 	parser.get_ts_file_list(file_list);
+	m3u8_data_struct.max_duration = parser.get_max_duration();
 	int index = 0;
 	for (auto &item : file_list)
 	{
@@ -291,8 +295,12 @@ bool StreamReceiver::_get_ts_cmd(HTTPTSCMD &cmd)
 
 void StreamReceiver::m3u8Callback(char *data, const int &data_len)
 {
-	//char http_out_file_name[1024] = { 0 };
-	//sprintf(http_out_file_name, "http_out_file_%d.ts", save_content_index_);
+#pragma region newmethod
+	//char *http_head_start = nullptr;
+	//_find_http_header_start(http_head_start, data, data_len);
+#pragma endregion newmethod
+	char http_out_file_name[1024] = { 0 };
+	sprintf(http_out_file_name, "m3u8_callback_file_%d.ts", save_content_index_);
 	//_write_content_to_file(http_out_file_name, data, data_len);
 	//std::cout << "data:" << data << "data_len:" << data_len << endl;
 	//vvlog_i("m3u8 callback data:" <<data << "datalen:"<< data_len);
@@ -332,6 +340,10 @@ void StreamReceiver::m3u8Callback(char *data, const int &data_len)
 				string m3u8_content = http_packet.substr(http_head_length, content_length);
 				M3U8Data m3u8_data_struct;
 				_parser_m3u8_file(m3u8_content.c_str(), m3u8_content.length(), m3u8_data_struct);
+				if (0 < m3u8_data_struct.max_duration)
+				{
+					play_stream_duration_ = (int)m3u8_data_struct.max_duration;
+				}
 				char out_file_name[1024] = {0};
 				sprintf(out_file_name, "m3u8callbackfile_%d.xml", callback_times_);
 				int file_index = 0;
@@ -390,7 +402,13 @@ void StreamReceiver::m3u8Callback(char *data, const int &data_len)
 void StreamReceiver::tsCallback(char *data, const int &data_len)
 {
 #pragma region new
+#pragma region test
+	callback_times_++;
+	char out_file_name[1024] = { 0 };
+	sprintf(out_file_name, "send_ts_%d.ts", callback_times_);
+	//_write_content_to_file(out_file_name, data, data_len);
 	_write_content_to_file("ts_callbcak.dat", data, data_len);
+#pragma endregion test
 	char *http_header_start = nullptr;
 	char *http_header_end = nullptr;
 	int send_length = 0;
@@ -402,7 +420,7 @@ void StreamReceiver::tsCallback(char *data, const int &data_len)
 		int head_length = http_header_start - data;
 		int http_code = 0;
 		char *http_first_line = nullptr;
-		if (_find_http_line_end(http_first_line, data, data_len))
+		if (_find_http_line_end(http_first_line, http_header_start, data_len))
 		{
 			char first_line_content[1024] = { 0 };
 			if (http_first_line)
@@ -421,16 +439,22 @@ void StreamReceiver::tsCallback(char *data, const int &data_len)
 			}
 			if (200 != http_code)//如果http请求失败不进行数据传输
 			{
+				vvlog_e("http request error!!!");
 				return;
 			}
+		}
+		else
+		{
+			cout << "error !!" << std::endl;
 		}
 		if (0 < head_length)
 		{
 			send_length = head_length;
 			if (0 < send_length)
 			{
+				vvlog_i("ts_callback send data mid.");
 				ts_send_signal_(data, head_length);
-				vvlog_i("ts_callback send data len:" << send_length);
+				vvlog_i("ts_callback send data len:" << send_length << "times:" << callback_times_);
 			}
 		}
 		if (http_header_end)
@@ -440,7 +464,7 @@ void StreamReceiver::tsCallback(char *data, const int &data_len)
 			if (0 < send_length)
 			{
 				ts_send_signal_(data + http_header_length, send_length);
-				vvlog_i("ts_callback send data len:" << send_length);
+				vvlog_i("ts_callback send data len:" << send_length<< "times:" << callback_times_);
 			}
 		}
 		else
@@ -450,6 +474,7 @@ void StreamReceiver::tsCallback(char *data, const int &data_len)
 	}
 	else
 	{
+		vvlog_i("ts_callback come here 3 !!");
 		if (http_header_end)
 		{
 			int http_end_length = http_header_end - data;
@@ -457,16 +482,17 @@ void StreamReceiver::tsCallback(char *data, const int &data_len)
 			if (0 < send_length)
 			{
 				ts_send_signal_(data + http_end_length, send_length);
-				vvlog_i("ts_callback send data len:" << send_length);
+				vvlog_i("ts_callback send data len:" << send_length<< "times:" << callback_times_);
 			}
 		}
 		else
 		{
 			send_length = data_len;
+			//vvlog_i("ts_callback come here 4 !!");
 			if (0 < send_length)
 			{
 				ts_send_signal_(data, data_len);
-				vvlog_i("ts_callback send data len:" << send_length);
+				vvlog_i("ts_callback send data len:" << send_length<< "times:" << callback_times_);
 			}
 		}
 	}
@@ -510,7 +536,7 @@ void StreamReceiver::tsCallback(char *data, const int &data_len)
 			{
 				//cout << "send ts data size:" << ts_send_size << std::endl;
 				vvlog_i("send ts data size:" << ts_send_size);
-				_write_content_to_file(out_file_name, end_char + 4, ts_send_size);
+				//_write_content_to_file(out_file_name, end_char + 4, ts_send_size);
 				ts_send_signal_(end_char+4, ts_send_size);
 			}
 			else
@@ -524,7 +550,7 @@ void StreamReceiver::tsCallback(char *data, const int &data_len)
 		{
 			vvlog_i("send ts data size:" << data_len);
 			//cout << "send ts data size:" << data_len << std::endl;
-			_write_content_to_file(out_file_name, data, data_len);
+			//_write_content_to_file(out_file_name, data, data_len);
 			ts_send_signal_(data, data_len);
 		}
 	}

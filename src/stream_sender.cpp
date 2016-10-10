@@ -62,29 +62,59 @@ void StreamSender::stream_receive_callback(char *data, const long int &data_len)
 	ts_index_++;
 	//_write_content_to_file(out_one_ts, data, data_len);
 	_write_content_to_file("ts.ts", data, data_len);
-	return;
+	//return;
 	BYTE *src_data = (BYTE*)data;
+	//vvlog_i("sender come here");
+	cout << "sender come here" << std::endl;
 	long int tmp_data_len = data_len;
 	int more_data_len = 0;//收到数据不是TS头的数据大小
+
+	if (TS_PACKET_LENGTH_STANDARD > data_len)//收到的数据不足188 添加到remain中
+	{
+		if (TS_PACKET_LENGTH_STANDARD >= ts_remain_packet_.real_size + data_len)
+		{
+			memcpy(ts_remain_packet_.content+ts_remain_packet_.real_size, data, tmp_data_len);
+			ts_remain_packet_.real_size = ts_remain_packet_.real_size + tmp_data_len;
+		}
+		else
+		{
+			cout << "receive ts error!!!" << std::endl;
+		}
+		if (ts_remain_packet_.real_size == TS_PACKET_LENGTH_STANDARD)
+		{
+			ts_packet_queue_.push(ts_remain_packet_);
+			memset(&ts_remain_packet_, 0, sizeof(ts_remain_packet_));
+		}
+		return;
+	}
+
 	if (0 < ts_remain_packet_.real_size)//有数据残留
 	{
-		while (!ts_packet_.SetPacket((BYTE*)data)||!ts_packet_.SetPacket((BYTE*)data + TS_PACKET_LENGTH_STANDARD))
+		int whole_data_len = ts_remain_packet_.real_size + more_data_len;
+		while (!ts_packet_.SetPacket((BYTE*)data)\
+			||!ts_packet_.SetPacket((BYTE*)data + TS_PACKET_LENGTH_STANDARD)\
+			||TS_PACKET_LENGTH_STANDARD > whole_data_len)
+			//如果不是ts同步字节 或者 此字节188后不是同步字节 或者 内容小于188 进行再次查找
 		{
 			data++;
 			tmp_data_len--;
 			more_data_len++;
+			whole_data_len = ts_remain_packet_.real_size + more_data_len;
 		}
-		int whole_data_len = ts_remain_packet_.real_size + more_data_len;
+		//vvlog_i("sender come here 1");
+		std::cout << "sender come here 1" << std::endl;
 		if (TS_PACKET_LENGTH_STANDARD == whole_data_len)
 		{
 			char *cpy_src = ts_remain_packet_.content + ts_remain_packet_.real_size;
+			ts_remain_packet_.real_size = TS_PACKET_LENGTH_STANDARD;
 			memcpy(cpy_src, src_data, more_data_len);
 			ts_packet_queue_.push(ts_remain_packet_);
-			vvlog_i("push ts packet count:" << ++push_count_);
+			//vvlog_i("push ts packet count:" << ++push_count_);
 		}
 		else
 		{
-			vvlog_e("one ts is not complete so ignore it");
+			//vvlog_e("one ts is not complete so ignore it");
+			std::cout << "one ts is not complete so ignore it" << std::endl;
 		}
 		memset(&ts_remain_packet_, 0, sizeof(ts_remain_packet_));//清空数据残留
 	}
@@ -102,13 +132,17 @@ void StreamSender::stream_receive_callback(char *data, const long int &data_len)
 		}
 		else
 		{
-			vvlog_e("ts packet error!!!");
+			//vvlog_e("ts packet error!!!");
+			cout << "ts packet error!!!" << std::endl;
 		}
 	}
 	if (data && 0 < tmp_data_len);
 	{
-		memcpy(ts_remain_packet_.content, data, tmp_data_len);
-		ts_remain_packet_.real_size = tmp_data_len;
+		if (TS_PACKET_LENGTH_STANDARD >= ts_remain_packet_.real_size + tmp_data_len)
+		{
+			memcpy(ts_remain_packet_.content+ts_remain_packet_.real_size, data, tmp_data_len);
+			ts_remain_packet_.real_size = ts_remain_packet_.real_size + tmp_data_len;
+		}
 	}
 
 #pragma endregion newmethod1
@@ -437,12 +471,14 @@ void StreamSender::_do_send_task_ext()
 			for (auto &udp_client_ptr : sender_clients_list_)
 			{
 				//cout << "dataLen:" << ts_send_content.real_size << std::endl;
-				vvlog_i("start send data datalen:" << ts_send_content.real_size);
+				//vvlog_i("start send data datalen:" << ts_send_content.real_size);
 				if (udp_client_ptr.second)
+				{
 					_write_content_to_file("ts_translate.ts"\
 						, ts_send_content.content\
 						, ts_send_content.real_size);
 					//udp_client_ptr.second->write(ts_send_content.content, ts_send_content.real_size, ts_send_content.need_time);
+				}
 			}
 		}
 	}
