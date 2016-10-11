@@ -33,6 +33,7 @@ public:
     typedef std::shared_ptr<coro_timer> coro_timer_ptr;
     typedef boost::asio::handler_type<boost::asio::yield_context, void(int)>::type async_result_handler;
 
+	boost::asio::ip::tcp::socket& socket() { return socket_; }
 	bool resize_recv_size(const long int &recv_size);
 	bool resize_send_size(const long int &send_size);
     /**

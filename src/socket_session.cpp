@@ -82,6 +82,7 @@ int SocketSession::_connect_ex(const string & content)
 << "port:" << socket_.local_endpoint().port());
 	if (socket_.is_open())
 	{
+		resize_recv_size(0x1000);
 		//resize_recv_buffer(m_recv_buff_size);
 		//resize_send_buffer(m_send_buff_size);
 		set_no_delay(true);

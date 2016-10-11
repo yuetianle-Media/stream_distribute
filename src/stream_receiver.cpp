@@ -6,7 +6,8 @@ StreamReceiver::StreamReceiver(const string &url)
 	:ts_task_list_(10000), uri_parser_(url), play_stream_duration_(5)\
 	, m3u8_thrd_ptr_(nullptr), ts_thrd_ptr_(nullptr), b_exit(false)\
 	, ts_file_index_(0), callback_times_(0), save_content_index_(0)\
-	, is_receive_ts_response_header_(false), ts_response_content_length_(0)
+	, is_receive_ts_response_header_(false), ts_response_content_length_(0)\
+	, is_reading_ts_http_header_(true), ts_http_content_length_(0)
 {
 	play_stream_ = _make_m3u8_cmd(url);
 	if (uri_parser_.is_ready())
@@ -120,11 +121,20 @@ bool StreamReceiver::_find_http_header_end(char* &dest, char*src, const int src_
 	return false;
 }
 
+bool StreamReceiver::_find_http_contentlen(long *content_len, char *src, const long src_length)
+{
+	while (src && 0 < src_length)
+	{
+		
+	}
+	return true;
+}
+
 bool StreamReceiver::_find_http_line_end(char* &dest, char*src, const int src_length)
 {
 	char *tmp_src = src;
 	int tmp_length = src_length;
-	while (tmp_src && 4 <= tmp_length)
+	while (tmp_src && 2 <= tmp_length)
 	{
 		if ('\r'== *tmp_src && '\n'== *(tmp_src + 1))
 		{
@@ -280,7 +290,7 @@ int StreamReceiver::_push_ts_cmd(const string &ts_cmd_str)
 	std::map<string, int>::iterator iter = ts_all_task_map_.find(ts_cmd_str);
 	if (iter == ts_all_task_map_.end())//此任务没有添加过
 	{
-		vvlog_i("push ts task:" << ts_cmd_str);
+		vvlog_i("push ts task cout:" << ts_all_task_map_.size() << "task:" << ts_cmd_str);
 		_write_ts_file_list("task.xml", ts_cmd_str, 0);
 		ts_all_task_map_.insert(std::make_pair(ts_cmd_str, ts_file_index_++));
 		ts_task_list_.push(ts_cmd);
@@ -401,6 +411,170 @@ void StreamReceiver::m3u8Callback(char *data, const int &data_len)
 
 void StreamReceiver::tsCallback(char *data, const int &data_len)
 {
+	//v_lock(lk, ts_)
+	vvlog_i("ts_callback start length:" << data_len);
+	_write_content_to_file("ts_callbcak.dat", data, data_len);
+#pragma region new1
+	if (is_reading_ts_http_header_)//正在读取http头
+	{
+		char *http_header_start = nullptr;
+		char *http_header_end = nullptr;
+		int send_length = 0;
+		vvlog_i("ts_callback start length:" << data_len);
+		if (_find_http_header_start(http_header_start, data, data_len))
+		{
+			if (_find_http_header_end(http_header_end, data, data_len))
+			{
+				//查找content length
+				string http_header;
+				ts_http_cache_.append(http_header_start, http_header_end - http_header_start);
+				httpparser::Response response;
+				httpparser::HttpResponseParser http_parser;
+				_write_content_to_file("http_header.txt", http_header_start, http_header_end - http_header_start);
+				httpparser::HttpResponseParser::ParseResult result \
+					= http_parser.parse(response, http_header_start, http_header_end);
+				if (result == httpparser::HttpResponseParser::ParsingCompleted)
+				{
+					for (auto item : response.headers)
+						if (item.name == "Content-Length")
+							ts_http_content_length_ = atoi(item.value.c_str());
+				}
+				else
+				{
+					std::cout << "parser error!!!" << std::endl;
+				}
+				ts_http_cache_.clear();
+				is_reading_ts_http_header_ = false;
+				int send_size = data_len - int(http_header_end - data);
+				ts_http_content_length_ -= send_size;
+				if (0 < send_size)
+				{
+					ts_send_signal_(http_header_end, send_size);
+					vvlog_i("ts_callback send data size:" << send_size << "remainlen:" << ts_http_content_length_);
+				}
+				if (0 >= ts_http_content_length_)
+				{
+					is_reading_ts_http_header_ = true;
+				}
+			}
+			else
+			{
+			}
+		}
+		else//没有找到头
+		{
+			if (_find_http_header_end(http_header_end, data, data_len))
+			{
+				int append_len = http_header_end - data;
+				ts_http_cache_.append(data, append_len);
+
+				//查找content length
+				string http_header;
+				httpparser::Response response;
+				httpparser::HttpResponseParser http_parser;
+				char *http_end = (char*)ts_http_cache_.data() + append_len;
+				_write_content_to_file("http_header.txt", (char*)ts_http_cache_.data(), ts_http_cache_.length());
+				httpparser::HttpResponseParser::ParseResult result \
+					= http_parser.parse(response, ts_http_cache_.data(), http_end);
+				if (result == httpparser::HttpResponseParser::ParsingCompleted)
+				{
+					for (auto item : response.headers)
+						if (item.name == "Content-Length")
+							ts_http_content_length_ = atoi(item.value.c_str());
+				}
+				else
+				{
+					std::cout << "parser error!!!" << std::endl;
+				}
+				ts_http_cache_.clear();
+				is_reading_ts_http_header_ = false;
+				int send_size = data_len - int(http_header_end - data);
+				ts_http_content_length_ -= send_size;
+				if (0 < send_size)
+				{
+					ts_send_signal_(http_header_end, send_size);
+					vvlog_i("ts_callback send data size:" << send_size << "remainlen:" << ts_http_content_length_);
+				}
+				if (0 >= ts_http_content_length_)
+				{
+					is_reading_ts_http_header_ = true;
+				}
+
+			}
+			else
+			{
+				assert(false);
+			}
+
+		}
+	}
+	else
+	{
+		if (0 >= ts_http_content_length_)
+		{
+			is_reading_ts_http_header_ = true;
+		}
+		else
+		{
+			if (0 < data_len && data_len <= ts_http_content_length_)//读取ts数据
+			{
+				ts_send_signal_(data, data_len);
+				vvlog_i("ts_callback send data size:" << data_len << "remainlen:" << ts_http_content_length_);
+				ts_http_content_length_ -= data_len;
+				if (0 >= ts_http_content_length_)
+					is_reading_ts_http_header_ = true;
+			}
+			else//ts数据后面有HTTP头部数据
+			{
+				ts_send_signal_(data, ts_http_content_length_);
+				vvlog_i("ts_callback send data size:" << ts_http_content_length_ << "remainlen:" << ts_http_content_length_);
+				char *end_char = data + ts_http_content_length_;
+				long int end_length = data_len - ts_http_content_length_;
+				char *http_start_1 = nullptr;
+				char *http_end_1 = nullptr;
+				ts_http_content_length_ = 0;
+				if (_find_http_header_start(http_start_1, end_char, end_length))
+				{
+					if (_find_http_header_end(http_end_1, end_char, end_length))
+					{
+						int send_size = data_len - int(http_end_1 - data);
+
+						string http_header;
+						httpparser::Response response;
+						httpparser::HttpResponseParser http_parser;
+						_write_content_to_file("http_header.txt", http_start_1, http_end_1 - http_start_1);
+						httpparser::HttpResponseParser::ParseResult result \
+							= http_parser.parse(response, http_start_1, http_end_1);
+						if (result == httpparser::HttpResponseParser::ParsingCompleted)
+						{
+							for (auto item : response.headers)
+								if (item.name == "Content-Length")
+									ts_http_content_length_ = atoi(item.value.c_str());
+						}
+						else
+						{
+							std::cout << "parser error!!!" << std::endl;
+						}
+						ts_send_signal_(http_end_1, send_size);
+						ts_http_content_length_ -= send_size;
+						if (0 >= ts_http_content_length_)
+						{
+							is_reading_ts_http_header_ = true;
+						}
+					}
+					else
+					{
+						ts_http_cache_.append(http_start_1, data_len - (http_start_1-data));
+						is_reading_ts_http_header_ = true;
+					}
+				}
+			}
+		}
+	}
+	return;
+#pragma endregion new1
+
+
 #pragma region new
 #pragma region test
 	callback_times_++;
@@ -499,6 +673,8 @@ void StreamReceiver::tsCallback(char *data, const int &data_len)
 	vvlog_i("ts_callback end");
 	return;
 #pragma endregion new
+
+
 	vvlog_i("ts callback start datalen:" << data_len);
 	//char http_out_file_name[1024] = { 0 };
 	//sprintf(http_out_file_name, "http_out_file_%d.txt", save_content_index_);
@@ -577,11 +753,20 @@ int StreamReceiver::_do_ts_task()
 {
     while (1) {
 		HTTPTSCMD ts_cmd_struct;
-		while (ts_task_list_.pop(ts_cmd_struct))
+		if (ts_tcp_client_ptr_ && ts_tcp_client_ptr_->socket().is_open())
 		{
-			string ts_cmd = ts_cmd_struct.cmd;
-            if (0 < ts_cmd.length())
-                _send_ts_cmd(ts_cmd);
+			while (ts_tcp_client_ptr_->socket().is_open() && ts_task_list_.pop(ts_cmd_struct))
+			{
+				string ts_cmd = ts_cmd_struct.cmd;
+				if (0 < ts_cmd.length())
+					_send_ts_cmd(ts_cmd);
+			}
+		}
+		else
+		{
+			ts_tcp_client_ptr_->connect();
+			ts_tcp_client_ptr_->subcribe_data_callback(boost::bind(&StreamReceiver::tsCallback, this, _1, _2));
+			ts_tcp_client_ptr_->wait_response();
 		}
         //std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }

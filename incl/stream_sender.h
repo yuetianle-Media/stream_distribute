@@ -91,6 +91,7 @@ private:
 	boost::lockfree::queue<TS_PACKET_CONTENT, boost::lockfree::fixed_sized<true>> ts_packet_queue_;//32K数据缓存大小
 	TS_PACKET_CONTENT ts_remain_packet_;
 	int push_count_;
+	std::mutex ts_send_mtx_;
 };
 
 typedef std::shared_ptr<StreamSender> StreamSenderPtr;

@@ -56,94 +56,341 @@ int StreamSender::stop()
 
 void StreamSender::stream_receive_callback(char *data, const long int &data_len)
 {
-#pragma region newmethod1
-	char out_one_ts[1024] = { 0 };
-	sprintf(out_one_ts, "ts_%d.ts", ts_index_);
-	ts_index_++;
-	//_write_content_to_file(out_one_ts, data, data_len);
+#pragma region  newmethod3
+	//必须确保收到的数据是完整连续的TS包
+	v_lock(lk, ts_send_mtx_);
 	_write_content_to_file("ts.ts", data, data_len);
-	//return;
-	BYTE *src_data = (BYTE*)data;
-	//vvlog_i("sender come here");
-	cout << "sender come here" << std::endl;
 	long int tmp_data_len = data_len;
-	int more_data_len = 0;//收到数据不是TS头的数据大小
-
-	if (TS_PACKET_LENGTH_STANDARD > data_len)//收到的数据不足188 添加到remain中
+	char* tmp_data = data;
+	while (tmp_data && TS_PACKET_LENGTH_STANDARD <= tmp_data_len)
 	{
-		if (TS_PACKET_LENGTH_STANDARD >= ts_remain_packet_.real_size + data_len)
+		if (0 < ts_remain_packet_.real_size)
 		{
-			memcpy(ts_remain_packet_.content+ts_remain_packet_.real_size, data, tmp_data_len);
-			ts_remain_packet_.real_size = ts_remain_packet_.real_size + tmp_data_len;
-		}
-		else
-		{
-			cout << "receive ts error!!!" << std::endl;
-		}
-		if (ts_remain_packet_.real_size == TS_PACKET_LENGTH_STANDARD)
-		{
+			int cpy_size = TS_PACKET_LENGTH_STANDARD - ts_remain_packet_.real_size;
+			memcpy(ts_remain_packet_.content + ts_remain_packet_.real_size, tmp_data, cpy_size);
+			ts_remain_packet_.real_size = TS_PACKET_LENGTH_STANDARD;
 			ts_packet_queue_.push(ts_remain_packet_);
 			memset(&ts_remain_packet_, 0, sizeof(ts_remain_packet_));
-		}
-		return;
-	}
-
-	if (0 < ts_remain_packet_.real_size)//有数据残留
-	{
-		int whole_data_len = ts_remain_packet_.real_size + more_data_len;
-		while (!ts_packet_.SetPacket((BYTE*)data)\
-			||!ts_packet_.SetPacket((BYTE*)data + TS_PACKET_LENGTH_STANDARD)\
-			||TS_PACKET_LENGTH_STANDARD > whole_data_len)
-			//如果不是ts同步字节 或者 此字节188后不是同步字节 或者 内容小于188 进行再次查找
-		{
-			data++;
-			tmp_data_len--;
-			more_data_len++;
-			whole_data_len = ts_remain_packet_.real_size + more_data_len;
-		}
-		//vvlog_i("sender come here 1");
-		std::cout << "sender come here 1" << std::endl;
-		if (TS_PACKET_LENGTH_STANDARD == whole_data_len)
-		{
-			char *cpy_src = ts_remain_packet_.content + ts_remain_packet_.real_size;
-			ts_remain_packet_.real_size = TS_PACKET_LENGTH_STANDARD;
-			memcpy(cpy_src, src_data, more_data_len);
-			ts_packet_queue_.push(ts_remain_packet_);
-			//vvlog_i("push ts packet count:" << ++push_count_);
+			tmp_data = tmp_data + cpy_size;
+			tmp_data_len -= cpy_size;
 		}
 		else
-		{
-			//vvlog_e("one ts is not complete so ignore it");
-			std::cout << "one ts is not complete so ignore it" << std::endl;
-		}
-		memset(&ts_remain_packet_, 0, sizeof(ts_remain_packet_));//清空数据残留
-	}
-	while (data && TS_PACKET_LENGTH_STANDARD <= tmp_data_len)
-	{
-		if (ts_packet_.SetPacket((BYTE*)data))
 		{
 			TS_PACKET_CONTENT ts_data;
-			memcpy(ts_data.content, data, TS_PACKET_LENGTH_STANDARD);
+			memcpy(ts_data.content, tmp_data, TS_PACKET_LENGTH_STANDARD);
 			ts_data.real_size = TS_PACKET_LENGTH_STANDARD;
 			ts_packet_queue_.push(ts_data);
-			//vvlog_i("push ts packet count:" << ++push_count_);
-			data = data + TS_PACKET_LENGTH_STANDARD;
+			tmp_data = tmp_data + TS_PACKET_LENGTH_STANDARD;
 			tmp_data_len -= TS_PACKET_LENGTH_STANDARD;
+		}
+	}
+	if (tmp_data && 0 < tmp_data_len)
+	{
+		if (0 < ts_remain_packet_.real_size)
+		{
+			int all_size = ts_remain_packet_.real_size + tmp_data_len;
+			if (TS_PACKET_LENGTH_STANDARD <= all_size)
+			{
+				int cpy_size = TS_PACKET_LENGTH_STANDARD - ts_remain_packet_.real_size;
+				memcpy(ts_remain_packet_.content + ts_remain_packet_.real_size, tmp_data, cpy_size);
+				ts_remain_packet_.real_size = TS_PACKET_LENGTH_STANDARD;
+				tmp_data = tmp_data + cpy_size;
+				ts_packet_queue_.push(ts_remain_packet_);
+				memset(&ts_remain_packet_, 0, sizeof(ts_remain_packet_));
+				int remain_size = all_size - TS_PACKET_LENGTH_STANDARD;
+				if (0 < remain_size)
+				{
+					memcpy(ts_remain_packet_.content, tmp_data, remain_size);
+					ts_remain_packet_.real_size = remain_size;
+				}
+			}
+			else
+			{
+				memcpy(ts_remain_packet_.content + ts_remain_packet_.real_size, tmp_data, tmp_data_len);
+				ts_remain_packet_.real_size += tmp_data_len;
+			}
 		}
 		else
 		{
-			//vvlog_e("ts packet error!!!");
-			cout << "ts packet error!!!" << std::endl;
+			memcpy(ts_remain_packet_.content, tmp_data, tmp_data_len);
+			ts_remain_packet_.real_size = tmp_data_len;
 		}
 	}
-	if (data && 0 < tmp_data_len);
-	{
-		if (TS_PACKET_LENGTH_STANDARD >= ts_remain_packet_.real_size + tmp_data_len)
-		{
-			memcpy(ts_remain_packet_.content+ts_remain_packet_.real_size, data, tmp_data_len);
-			ts_remain_packet_.real_size = ts_remain_packet_.real_size + tmp_data_len;
-		}
-	}
+#pragma endregion newmethod3
+#pragma region newmethod2
+	//char *tmp_data = data;
+	//long int tmp_data_length = data_len;
+
+	//_write_content_to_file("ts.ts", data, data_len);
+	//if (TS_PACKET_LENGTH_STANDARD > data_len)//数据小于188
+	//{
+	//	//缓存数据
+	//	int remain_space = TS_PACKET_LENGTH_STANDARD - ts_remain_packet_.real_size;
+	//	if (0 < remain_space && remain_space >= data_len)//缓存可用并且有足够空间
+	//	{
+	//		memcpy(ts_remain_packet_.content + ts_remain_packet_.real_size, data, data_len);
+	//		ts_remain_packet_.real_size += data_len;
+	//	}
+	//	else//缓存不够用
+	//	{
+	//		if (ts_packet_.SetPacket((BYTE*)data))//更新缓存的数据 是ts数据
+	//		{
+	//			memset(&ts_remain_packet_, 0, sizeof(ts_remain_packet_));
+	//			memcpy(ts_remain_packet_.content + ts_remain_packet_.real_size, data, data_len);
+	//		}
+	//	}
+	//	if (ts_remain_packet_.real_size == TS_PACKET_LENGTH_STANDARD)//缓存了一整包TS
+	//	{
+	//		ts_packet_queue_.push(ts_remain_packet_);
+	//		memset(&ts_remain_packet_, 0, sizeof(ts_remain_packet_));
+	//	}
+	//	//清空缓存数据
+	//}
+	//else
+	//{
+	//	//查找TS的同步字节
+	//	int step_count = 0;
+	//	bool b_find_sync = false;
+	//	while (tmp_data && TS_PACKET_LENGTH_STANDARD <= tmp_data_length)
+	//	{
+	//		char *second_sync_flag = tmp_data + TS_PACKET_LENGTH_STANDARD;
+	//		if (0 >= ts_remain_packet_.real_size)//缓存中无数据
+	//		{
+	//			if (ts_packet_.SetPacket((BYTE*)tmp_data))
+	//			{
+	//				b_find_sync = true;
+	//				break;//查找到TS同步头
+	//			}
+	//		}
+	//		if (second_sync_flag)
+	//		{
+	//			int remain_all_count = step_count + ts_remain_packet_.real_size;
+	//			if (ts_packet_.SetPacket((BYTE*)tmp_data)\
+	//				&& ts_packet_.SetPacket((BYTE*)second_sync_flag)\
+	//				&& remain_all_count >= TS_PACKET_LENGTH_STANDARD)
+	//			{
+	//				b_find_sync = true;
+	//				break;//查找到TS同步头
+	//			}
+	//		}
+	//		else
+	//		{
+	//			int remain_all_count = step_count + ts_remain_packet_.real_size;
+	//			if (ts_packet_.SetPacket((BYTE*)tmp_data)\
+	//				&& remain_all_count >= TS_PACKET_LENGTH_STANDARD)
+	//			{
+	//				b_find_sync = true;
+	//				break;//查找到TS同步头
+	//			}
+	//		}
+	//		tmp_data++;
+	//		tmp_data_length--;
+	//		step_count++;
+	//	}
+	//	if (!b_find_sync)
+	//	{
+	//		std::cout << "not find sync bytes" << std::endl;
+	//	}
+	//	//处理头部多余字节
+	//	int head_length = tmp_data - data;
+	//	if (0 < head_length)//头部有多余字节
+	//	{
+	//		if (0 < ts_remain_packet_.real_size)//缓存中有数据
+	//		{
+	//			//缓存数据
+	//			int remain_space = TS_PACKET_LENGTH_STANDARD - ts_remain_packet_.real_size;
+	//			if (0 < remain_space && remain_space >= head_length)//缓存可用并且有足够空间
+	//			{
+	//				memcpy(ts_remain_packet_.content + ts_remain_packet_.real_size, data, head_length);
+	//				ts_remain_packet_.real_size += head_length;
+	//			}
+	//			else//缓存不够用
+	//			{
+	//				if (ts_packet_.SetPacket((BYTE*)data))//更新缓存的数据 是ts数据
+	//				{
+	//					memset(&ts_remain_packet_, 0, sizeof(ts_remain_packet_));
+	//					if (TS_PACKET_LENGTH_STANDARD >= head_length)
+	//					{
+	//						memcpy(ts_remain_packet_.content, data, head_length);
+	//						ts_remain_packet_.real_size = head_length;
+	//					}
+	//					else
+	//						std::cout << "head more data length:" << head_length << std::endl;
+	//				}
+	//			}
+	//			if (ts_remain_packet_.real_size == TS_PACKET_LENGTH_STANDARD)//缓存了一整包TS
+	//			{
+	//				ts_packet_queue_.push(ts_remain_packet_);
+	//				memset(&ts_remain_packet_, 0, sizeof(ts_remain_packet_));
+	//			}
+	//		}
+	//	}
+	//	//处理连续TS数据
+	//	while (tmp_data && TS_PACKET_LENGTH_STANDARD < tmp_data_length)
+	//	{
+	//		if (ts_packet_.SetPacket((BYTE*)tmp_data))
+	//		{
+	//			TS_PACKET_CONTENT ts_data;
+	//			memcpy(ts_data.content, tmp_data, TS_PACKET_LENGTH_STANDARD);
+	//			ts_data.real_size = TS_PACKET_LENGTH_STANDARD;
+	//			ts_packet_queue_.push(ts_data);
+	//			//vvlog_i("push ts packet count:" << ++push_count_);
+	//			tmp_data = tmp_data + TS_PACKET_LENGTH_STANDARD;
+	//			tmp_data_length -= TS_PACKET_LENGTH_STANDARD;
+	//		}
+	//		else
+	//		{
+	//			//vvlog_e("ts packet error!!!");
+	//			cout << "ts packet error!!!" << std::endl;
+	//			tmp_data++;//TS同步字节出错
+	//			tmp_data_length--;
+	//		}
+	//	}
+	//	//尾部有多余字节
+	//	if (tmp_data && 0 < tmp_data_length)
+	//	{
+	//		//缓存数据
+	//		int tail_length = tmp_data_length;
+	//		int remain_space = TS_PACKET_LENGTH_STANDARD - ts_remain_packet_.real_size;
+	//		if (0 < remain_space && remain_space >= tail_length)//缓存可用并且有足够空间
+	//		{
+	//			memcpy(ts_remain_packet_.content + ts_remain_packet_.real_size, tmp_data, tail_length);
+	//			ts_remain_packet_.real_size += tail_length;
+	//		}
+	//		else//缓存不够用
+	//		{
+	//			if (ts_packet_.SetPacket((BYTE*)tmp_data))//更新缓存的数据 是ts数据
+	//			{
+	//				memset(&ts_remain_packet_, 0, sizeof(ts_remain_packet_));
+
+	//				if (TS_PACKET_LENGTH_STANDARD >= tail_length)
+	//				{
+	//					memcpy(ts_remain_packet_.content, tmp_data, tail_length);
+	//					ts_remain_packet_.real_size = tail_length;
+	//				}
+	//				else
+	//					std::cout << "head more data length:" << head_length << std::endl;
+	//			}
+	//		}
+	//		if (ts_remain_packet_.real_size == TS_PACKET_LENGTH_STANDARD)//缓存了一整包TS
+	//		{
+	//			ts_packet_queue_.push(ts_remain_packet_);
+	//			memset(&ts_remain_packet_, 0, sizeof(ts_remain_packet_));
+	//		}
+	//		//清空缓存数据
+	//	}
+	//}
+#pragma endregion newmethod2 
+#pragma region newmethod1
+	//char out_one_ts[1024] = { 0 };
+	//int inner_ts_index = 0;
+	//sprintf(out_one_ts, "ts_%d_%d.ts", ts_index_, inner_ts_index);
+	//ts_index_++;
+	////_write_content_to_file(out_one_ts, data, data_len);
+	//_write_content_to_file("ts.ts", data, data_len);
+	////return;
+	//BYTE *src_data = (BYTE*)data;
+	//char *src_data_s = data;
+	////vvlog_i("sender come here");
+	//cout << "sender come here" << std::endl;
+	//long int tmp_data_len = data_len;
+	//int more_data_len = 0;//收到数据不是TS头的数据大小
+
+	//if (TS_PACKET_LENGTH_STANDARD > data_len)//收到的数据不足188 添加到remain中
+	//{
+	//	_write_content_to_file(out_one_ts, data, data_len);
+	//	inner_ts_index++;
+	//	sprintf(out_one_ts, "ts_%d_%d.ts", ts_index_, inner_ts_index);
+	//	if (TS_PACKET_LENGTH_STANDARD >= ts_remain_packet_.real_size + data_len)
+	//	{
+	//		memcpy(ts_remain_packet_.content+ts_remain_packet_.real_size, data, tmp_data_len);
+	//		ts_remain_packet_.real_size = ts_remain_packet_.real_size + tmp_data_len;
+	//	}
+	//	else
+	//	{
+	//		cout << "receive ts error!!!" << std::endl;
+	//	}
+	//	if (ts_remain_packet_.real_size == TS_PACKET_LENGTH_STANDARD)
+	//	{
+	//		ts_packet_queue_.push(ts_remain_packet_);
+	//		memset(&ts_remain_packet_, 0, sizeof(ts_remain_packet_));
+	//	}
+	//	else
+	//	{
+	//		std::cout << "receive error!!!" << std::endl;
+	//	}
+	//	return;
+	//}
+
+	//if (0 < ts_remain_packet_.real_size)//有数据残留
+	//{
+	//	_write_content_to_file(out_one_ts, (char*)src_data, data_len);
+	//	inner_ts_index++;
+	//	sprintf(out_one_ts, "ts_%d_%d.ts", ts_index_, inner_ts_index);
+	//	int whole_data_len = ts_remain_packet_.real_size + more_data_len;
+	//	while (!ts_packet_.SetPacket((BYTE*)data)\
+	//		||!ts_packet_.SetPacket((BYTE*)data + TS_PACKET_LENGTH_STANDARD)\
+	//		||TS_PACKET_LENGTH_STANDARD > whole_data_len)
+	//		//如果不是ts同步字节 或者 此字节188后不是同步字节 或者 内容小于188 进行再次查找
+	//	{
+	//		data++;
+	//		tmp_data_len--;
+	//		more_data_len++;
+	//		whole_data_len = ts_remain_packet_.real_size + more_data_len;
+	//	}
+	//	//vvlog_i("sender come here 1");
+	//	std::cout << "sender come here 1" << std::endl;
+	//	if (TS_PACKET_LENGTH_STANDARD == whole_data_len)
+	//	{
+	//		char *cpy_src = ts_remain_packet_.content + ts_remain_packet_.real_size;
+	//		ts_remain_packet_.real_size = TS_PACKET_LENGTH_STANDARD;
+	//		memcpy(cpy_src, (char*)src_data, more_data_len);
+	//		ts_packet_queue_.push(ts_remain_packet_);
+	//		//vvlog_i("push ts packet count:" << ++push_count_);
+	//	}
+	//	else
+	//	{
+	//		//vvlog_e("one ts is not complete so ignore it");
+	//		std::cout << "one ts is not complete so ignore it" << std::endl;
+	//	}
+	//	memset(&ts_remain_packet_, 0, sizeof(ts_remain_packet_));//清空数据残留
+	//}
+	//while (data && TS_PACKET_LENGTH_STANDARD <= tmp_data_len)
+	//{
+	//	if (ts_packet_.SetPacket((BYTE*)data))
+	//	{
+	//		TS_PACKET_CONTENT ts_data;
+	//		memcpy(ts_data.content, data, TS_PACKET_LENGTH_STANDARD);
+	//		ts_data.real_size = TS_PACKET_LENGTH_STANDARD;
+	//		ts_packet_queue_.push(ts_data);
+	//		//vvlog_i("push ts packet count:" << ++push_count_);
+	//		data = data + TS_PACKET_LENGTH_STANDARD;
+	//		tmp_data_len -= TS_PACKET_LENGTH_STANDARD;
+	//	}
+	//	else
+	//	{
+	//		//vvlog_e("ts packet error!!!");
+	//		cout << "ts packet error!!!" << std::endl;
+	//	}
+	//}
+	//if (data && 0 < tmp_data_len);
+	//{
+	//	_write_content_to_file(out_one_ts, (char*)src_data, data_len);
+	//	inner_ts_index++;
+	//	sprintf(out_one_ts, "ts_%d_%d.ts", ts_index_, inner_ts_index);
+	//	if (ts_packet_.SetPacket((BYTE*)data))
+	//	{
+	//		if (TS_PACKET_LENGTH_STANDARD >= ts_remain_packet_.real_size + tmp_data_len)
+	//		{
+	//			memcpy(ts_remain_packet_.content+ts_remain_packet_.real_size, data, tmp_data_len);
+	//			ts_remain_packet_.real_size = ts_remain_packet_.real_size + tmp_data_len;
+	//		}
+	//	}
+	//	else
+	//	{
+	//		//剩下的数据没有同步字节 丢弃
+	//	}
+	//}
 
 #pragma endregion newmethod1
 #ifdef TEST

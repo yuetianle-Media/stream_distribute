@@ -181,7 +181,7 @@ int TCPClient::_send(const char * content, const int & length, boost::asio::yiel
 	boost::system::error_code ec;
 	if (!socket_.is_open())
 	{
-		connect();
+		return E_CONN_ERROR;
 	}
 	if (timer_ptr_)
 	{

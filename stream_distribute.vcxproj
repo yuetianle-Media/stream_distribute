@@ -161,6 +161,7 @@
     <ClInclude Include="incl\demux.h" />
     <ClInclude Include="incl\dvb.h" />
     <ClInclude Include="incl\errcode.h" />
+    <ClInclude Include="incl\httpresponseparser.h" />
     <ClInclude Include="incl\http_flags.h" />
     <ClInclude Include="incl\m3u8define.h" />
     <ClInclude Include="incl\m3u8Parser.h" />
@@ -170,6 +171,7 @@
     <ClInclude Include="incl\pre_std_basic.h" />
     <ClInclude Include="incl\pugiconfig.hpp" />
     <ClInclude Include="incl\pugixml.hpp" />
+    <ClInclude Include="incl\response.h" />
     <ClInclude Include="incl\rule_manager.h" />
     <ClInclude Include="incl\socket_session.h" />
     <ClInclude Include="incl\stream_buffer.h" />

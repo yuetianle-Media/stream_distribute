@@ -18,6 +18,45 @@ UDPClient::~UDPClient()
 
 }
 
+int UDPClient::write_ext(char *data, const long int &data_len, const double &need_time)
+{
+	auto self = shared_from_this();
+	int result = _run_sync_action([this, self, data, data_len, need_time]\
+		(const coro_promise_ptr &porm , const coro_timer_ptr &ptimer , boost::asio::yield_context yield)
+	{
+		try
+		{
+			boost::system::error_code ec;
+			udp_socket_.async_send(boost::asio::buffer(data, data_len), yield[ec]);
+			if (!ec)
+			{
+				porm->set_value(E_OK);
+			}
+			else
+			{
+				porm->set_value(E_SEND_ERROR);
+			}
+			if (nullptr != ptimer)
+			{
+				ptimer->cancel();
+			}
+		}
+		catch (std::exception &e)
+		{
+			
+		}
+		catch (std::error_code &e)
+		{
+		}
+	}, time_out_ms_);
+	if (result != E_OK)
+	{
+		vvlog_e("send cmd end faile cmd:" << data);
+		_close();
+	}
+	return E_OK;
+}
+
 int UDPClient::write(char *data, const int &data_len)
 {
 	auto self = shared_from_this();

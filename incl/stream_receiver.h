@@ -14,6 +14,9 @@
 #include <boost/filesystem.hpp>
 #include "pugixml.hpp"
 
+#include "response.h"
+#include "httpresponseparser.h"
+
 #include "tcpclient.h"
 #include "uri_parser.h"
 #include "m3u8Parser.h"
@@ -46,6 +49,7 @@ public:
 private:
 	bool _find_http_header_start(char* &dest, char*src, const int src_length);
 	bool _find_http_header_end(char* &dest, char*src, const int src_length);
+	bool _find_http_contentlen(long *content_len, char *src, const long src_length);
 
 	bool _find_http_line_end(char* &dest, char*src, const int src_length);
     /**
@@ -119,6 +123,12 @@ private:
 	int save_content_index_;
 	std::atomic<bool> is_receive_ts_response_header_;
 	long int ts_response_content_length_;
+
+
+	//ts_callback flags
+	std::atomic<bool> is_reading_ts_http_header_;
+	std::atomic<long int> ts_http_content_length_;
+	string ts_http_cache_;//当收到的http头不完整时进行缓存
 };
 
 typedef std::shared_ptr<StreamReceiver> StreamReceiverPtr;
