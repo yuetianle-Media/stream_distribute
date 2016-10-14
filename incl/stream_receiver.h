@@ -26,7 +26,7 @@ using namespace pugi;
 typedef boost::signals2::signal<void(char *, const int&)> M3u8Signal;
 typedef boost::signals2::signal<void(char *, const long int&)> TsSignal;
 
-class StreamReceiver
+class StreamReceiver //: boost::signals2::trackable
 {
 public:
 	StreamReceiver(const std::string &url);
@@ -100,8 +100,8 @@ private:
 
     TsSignal ts_send_signal_;
 
-    boost::signals2::connection m3u8_conn;/* << m3u8 data callback connection*/
-    boost::signals2::connection ts_conn;/* << ts data callback connection*/
+    boost::signals2::connection m3u8_conn_;/* << m3u8 data callback connection*/
+    boost::signals2::connection ts_conn_;/* << ts data callback connection*/
     std::string stream_url_;/* << uri to play a stream.*/
     std::string play_stream_;/* << http cmd to play a stream*/
     int play_stream_duration_;/*<< duration to send http cmd*/
@@ -117,6 +117,7 @@ private:
 
 	int ts_file_index_;
 	std::atomic<int> callback_times_;
+	std::atomic<bool> ts_need_receive_;
     bool b_exit;/* << exit the thread.*/
 	std::string http_packet;/*<< one http packet buff with m3u8 data*/
 	std::string http_ts_packet_;/*<< one http packet buff with ts data*/
@@ -127,6 +128,7 @@ private:
 
 	//ts_callback flags
 	std::atomic<bool> is_reading_ts_http_header_;
+	std::atomic<bool> is_ts_http_content_end_;
 	std::atomic<long int> ts_http_content_length_;
 	string ts_http_cache_;//当收到的http头不完整时进行缓存
 };

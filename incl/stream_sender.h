@@ -39,6 +39,16 @@ typedef struct TS_BASIC_CONTENT
 	int packet_num;
 };
 
+typedef struct IPPORTV
+{
+	std::string ip;
+	int port;
+	IPPORTV()
+		:port(0)
+	{
+
+	}
+}IPPORTPAIR;
 //#define TEST 1
 class StreamSender :public std::enable_shared_from_this<StreamSender>
 {
@@ -82,6 +92,7 @@ private:
 	double tranlate_rate_;
 	double tranlate_interval_time_;
 	std::map<string, UDPClientPtr> sender_clients_list_;/*<< (ip:port):udpclient example "224.0.1.20:8000"*/
+	std::map<std::string, IPPORTPAIR> multicast_list_;
 	std::shared_ptr<std::thread> send_task_thrd_;
 	std::atomic<bool> is_exit_;
 	char *pop_address_;
@@ -92,6 +103,7 @@ private:
 	TS_PACKET_CONTENT ts_remain_packet_;
 	int push_count_;
 	std::mutex ts_send_mtx_;
+	fstream out_ts_file;
 };
 
 typedef std::shared_ptr<StreamSender> StreamSenderPtr;

@@ -95,7 +95,7 @@ public:
      *
      * @param subcriber 订阅连接.
      */
-    void unsubcribe_data_callback(boost::signals2::connection subcriber);
+    void unsubcribe_data_callback(boost::signals2::connection &subcriber);
 
 private:
 

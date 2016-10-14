@@ -16,7 +16,7 @@ SocketSession::SocketSession(const string &remote_server, const int &port, const
 		boost::system::error_code ec;
 		svc->run(ec);
 #ifdef _DEBUG
-		std::cout << "service terminated." << std::endl;
+		std::cout << "service terminated. ec:" << ec.value() << "msg:" << ec.message()<< std::endl;
 #endif // _DEBUG
 	});
 
@@ -78,8 +78,15 @@ int SocketSession::_connect_ex(const string & content)
 	}, timeout_);
 
 	if (E_OK == result)
+	{
 		vvlog_i("connect success local address:" << socket_.local_endpoint().address().to_string()\
 << "port:" << socket_.local_endpoint().port());
+	}
+	else
+	{
+		vvlog_i("connect fail local address:" << socket_.local_endpoint().address().to_string()\
+<< "port:" << socket_.local_endpoint().port() << "err:" << result);
+	}
 	if (socket_.is_open())
 	{
 		resize_recv_size(0x1000);
@@ -208,6 +215,7 @@ void SocketSession::_spawn_handle_timeout(const coro_timer_ptr & ptimer, const c
 				if (ptimer->expires_from_now() <= chrono::milliseconds(0))
 				{
 					//socket_.close(ec);
+					ptimer->cancel();
 					if (prom != nullptr)
 					{
 						if (prom->get_future().valid())

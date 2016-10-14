@@ -48,11 +48,11 @@ int TCPClient::receive()
 int TCPClient::async_send(const char *content, const int &length)
 {
 	//vvlog_i("send cmd start");
-	if (!socket_.is_open())
-	{
-		vvlog_w("connect is error reconnectiong");
-		connect();
-	}
+	//if (!socket_.is_open())
+	//{
+	//	vvlog_w("connect is error reconnectiong");
+	//	connect();
+	//}
 	boost::system::error_code ec;
 	if (timer_ptr_)
 	{
@@ -91,14 +91,15 @@ int TCPClient::async_send(const char *content, const int &length)
 	//boost::asio::async_write(socket_, boost::asio::buffer(content, length));
 	if (result != E_OK)
 	{
-		vvlog_e("send cmd end faile cmd:" << content);
-		_close();
+		vvlog_e("send cmd end faile cmd:" << content << "errcode:" << result);
+		//_close();
+		return E_CONN_ERROR;
 	}
 	//else
 	//{
 	//	vvlog_i("send cmd end success content:" << content << "size:" << length);
 	//}
-	return 0;
+	return E_OK;
 }
 
 int TCPClient::async_send_ext(const char *content, const int &length)
@@ -141,12 +142,15 @@ int TCPClient::wait_response()
 		[this, self](boost::asio::yield_context yield)
 	{
 		boost::system::error_code ec;
-		if (timer_ptr_)
-		timer_ptr_->expires_from_now(std::chrono::milliseconds(timeout_), ec);
+		//if (timer_ptr_)
+		//	timer_ptr_->expires_from_now(std::chrono::milliseconds(timeout_), ec);
 		boost::aligned_storage<0x8000> buff;
 		for (;;)
 		{
+			//timer_ptr_->expires_from_now(std::chrono::milliseconds(timeout_), ec);
+			//socket_.async_receive()
 			size_t sz = socket_.async_read_some(boost::asio::buffer((char*)buff.address(), buff.size), yield[ec]);
+			//size_t sz = boost::asio::async_read(socket_, boost::asio::buffer((char*)buff.address(), buff.size), yield[ec]);
 			if (!ec)
 			{
 				if (sz > 0)
@@ -154,8 +158,24 @@ int TCPClient::wait_response()
 					string req((char*)buff.address(), sz);
 					//std::cout << "receive data:" << req << std::endl;
 					//std::cout << "start time:" << boost::local_time::cur
-					//vvlog_i("receive data len:" << sz);
-					data_send_signal_((char*)req.c_str(), sz);
+					//vvlog_i("receive len:" << sz << "len:" << req);
+					try
+					{
+						if (!data_send_signal_.empty())
+						{
+							//vvlog_i("send data size:" << sz);
+							std::cout << "receive data size:" << sz << " port:" << socket_.local_endpoint().port() << std::endl;
+							data_send_signal_((char*)req.c_str(), sz);
+						}
+						else
+						{
+							vvlog_e("data signal slot empty");
+						}
+					}
+					catch (std::exception &e)
+					{
+						vvlog_e("data receive error" << e.what());
+					}
 				}
 				else
 				{
@@ -164,15 +184,19 @@ int TCPClient::wait_response()
 			}
 			else
 			{
-				vvlog_e("connect is brokent value:" << ec.value() << "mesg:" << ec.message());
-				//std::cout << "err:" << ec.value() << "mesg:" << ec.message() << std::endl;
+				vvlog_e("connect is brokent value:" << ec.value()\
+					<< "mesg:" << ec.message() << "address:"\
+					<< socket_.local_endpoint().address().to_string()\
+					<< "port:" << socket_.local_endpoint().port());
+				data_send_signal_(nullptr, E_MESG_END);
 				_close();
 				break;
+				//std::cout << "err:" << ec.value() << "mesg:" << ec.message() << std::endl;
 			}
 		}
 
 	});
-	_spawn_handle_timeout(timer_ptr_, nullptr);
+	//_spawn_handle_timeout(timer_ptr_, nullptr);
 	return 0;
 }
 
@@ -229,9 +253,11 @@ int TCPClient::_receive(const int & size, boost::asio::yield_context yield)
 	return 0;
 }
 
-void TCPClient::unsubcribe_data_callback(boost::signals2::connection subcriber)
+void TCPClient::unsubcribe_data_callback(boost::signals2::connection &subcriber)
 {
-    subcriber.disconnect();
+	vvlog_i("signal slot num:" << data_send_signal_.num_slots());
+	data_send_signal_.disconnect_all_slots();
+    //subcriber.disconnect();
 }
 boost::signals2::connection TCPClient::subcribe_data_callback(const DataReceiveSignal::slot_type &slot)
 {

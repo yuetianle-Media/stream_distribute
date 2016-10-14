@@ -7,6 +7,7 @@
 #define E_CONN_TIMEOUT -11
 #define E_REMOTE_ADDR_EMPTY -12
 #define E_SEND_ERROR -16
+#define E_MESG_END -100
 #pragma endregion NETWORK
 
 #pragma region File

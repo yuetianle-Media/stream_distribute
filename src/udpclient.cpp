@@ -13,21 +13,29 @@ UDPClient::UDPClient(const int &local_port, const int &timeout_ms, const string 
 
 }
 
+UDPClient::UDPClient(const int &local_port, const int &timeout_ms)
+	:UDPSocketSession(local_port, timeout_ms)
+{
+
+}
+
 UDPClient::~UDPClient()
 {
 
 }
 
-int UDPClient::write_ext(char *data, const long int &data_len, const double &need_time)
+int UDPClient::write_ext(char *data, const long int &data_len, const double &need_time, const string &remote_addr, const int &remote_port)
 {
 	auto self = shared_from_this();
-	int result = _run_sync_action([this, self, data, data_len, need_time]\
+	boost::asio::ip::udp::endpoint remote_ep(boost::asio::ip::address_v4::from_string(remote_addr), remote_port);
+	int result = _run_sync_action([this, self, data, data_len, need_time, remote_ep]\
 		(const coro_promise_ptr &porm , const coro_timer_ptr &ptimer , boost::asio::yield_context yield)
 	{
 		try
 		{
 			boost::system::error_code ec;
-			udp_socket_.async_send(boost::asio::buffer(data, data_len), yield[ec]);
+			udp_socket_.async_send_to(boost::asio::buffer(data, data_len), remote_ep, yield[ec]);
+			//udp_socket_.async_send(boost::asio::buffer(data, data_len), yield[ec]);
 			if (!ec)
 			{
 				porm->set_value(E_OK);
@@ -52,7 +60,7 @@ int UDPClient::write_ext(char *data, const long int &data_len, const double &nee
 	if (result != E_OK)
 	{
 		vvlog_e("send cmd end faile cmd:" << data);
-		_close();
+		//_close();
 	}
 	return E_OK;
 }

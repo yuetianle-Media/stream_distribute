@@ -6,11 +6,15 @@ inline void test_stream_sender(const string &url, const string &multi_server, co
 	StreamReceiver stream_receiver(url);
 	StreamSender stream_sender;
 	stream_sender.add_sender_address(multi_server, port);
-	stream_receiver.subcribe_ts_callback(boost::bind(&StreamSender::stream_receive_callback, &stream_sender, _1,_2));
+	boost::signals2::connection sender_connect = stream_receiver.subcribe_ts_callback(boost::bind(&StreamSender::stream_receive_callback, &stream_sender, _1,_2));
 	stream_receiver.start();
 	stream_sender.start();
 	while (1)
 	{
+		if (!sender_connect.connected())
+		{
+			sender_connect = stream_receiver.subcribe_ts_callback(boost::bind(&StreamSender::stream_receive_callback, &stream_sender, _1,_2));
+		}
 		this_thread::sleep_for(std::chrono::seconds(5));
 	}
 

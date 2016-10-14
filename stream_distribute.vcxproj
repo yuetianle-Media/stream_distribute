@@ -96,7 +96,7 @@
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>false</SDLCheck>
-      <AdditionalIncludeDirectories>.\incl;.;.\test;%(AdditionalIncludeDirectories);..\vistek_logger\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.\incl;.;.\test;%(AdditionalIncludeDirectories);..\vistek_logger\incl</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
     </ClCompile>
     <Link>
