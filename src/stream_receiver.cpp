@@ -373,8 +373,8 @@ void StreamReceiver::m3u8Callback(char *data, const int &data_len)
 				{
 					play_stream_duration_ = (int)m3u8_data_struct.max_duration;
 				}
-				char out_file_name[1024] = {0};
-				sprintf(out_file_name, "m3u8callbackfile_%d.xml", callback_times_);
+				//char out_file_name[1024] = {0};
+				//sprintf(out_file_name, "m3u8callbackfile_%d.xml", callback_times_);
 				int file_index = 0;
 				for (auto &item : m3u8_data_struct.ts_file_list)
 				{
@@ -445,8 +445,8 @@ void StreamReceiver::tsCallback(char *data, const int &data_len)
 	//vvlog_i("ts_callback start length:" << data_len);
 	//_write_content_to_file("ts_callbcak.dat", data, data_len);
 	//callback_times_++;
-	char out_file_name[1024] = { 0 };
-	sprintf(out_file_name, "send_ts_%d.ts", callback_times_);
+	//char out_file_name[1024] = { 0 };
+	//sprintf(out_file_name, "send_ts_%d.ts", callback_times_);
 #pragma region new1
 	if (is_reading_ts_http_header_)//正在读取http头
 	{
@@ -513,8 +513,8 @@ void StreamReceiver::tsCallback(char *data, const int &data_len)
 					//_write_content_to_file("ts_src.ts", http_header_end, ts_head_send_size);
 					//_write_content_to_file(out_file_name, http_header_end, ts_head_send_size);
 					//vvlog_i("ts_callback filename:" << out_file_name << "send data size:" << ts_head_send_size << "remainlen:" << ts_http_content_length_);
-					sprintf(out_file_name, "send_ts_%d.ts", callback_times_);
-					callback_times_++;
+					//sprintf(out_file_name, "send_ts_%d.ts", callback_times_);
+					//callback_times_++;
 					//_write_content_to_file()
 				}
 				if (0 >= ts_http_content_length_)
@@ -577,7 +577,7 @@ void StreamReceiver::tsCallback(char *data, const int &data_len)
 					//_write_content_to_file("ts_src.ts", http_header_end, ts_send_size);
 					//_write_content_to_file(out_file_name, http_header_end, ts_send_size);
 					//vvlog_i("ts_callback send file:" << out_file_name << "data size:" << ts_send_size << "remainlen:" << ts_http_content_length_);
-					sprintf(out_file_name, "send_ts_%d.ts", callback_times_);
+					//sprintf(out_file_name, "send_ts_%d.ts", callback_times_);
 					callback_times_++;
 				}
 				if (0 >= ts_http_content_length_)
@@ -610,8 +610,8 @@ void StreamReceiver::tsCallback(char *data, const int &data_len)
 				ts_send_signal_(data, data_len);
 				//_write_content_to_file("ts_src.ts", data, data_len);
 				//_write_content_to_file(out_file_name, data, data_len);
-					sprintf(out_file_name, "send_ts_%d.ts", callback_times_);
-					callback_times_++;
+					//sprintf(out_file_name, "send_ts_%d.ts", callback_times_);
+					//callback_times_++;
 				//vvlog_i("ts_callback send data size:" << data_len << "remainlen:" << ts_http_content_length_);
 				if (0 >= ts_http_content_length_)
 				{
@@ -628,8 +628,8 @@ void StreamReceiver::tsCallback(char *data, const int &data_len)
 					//_write_content_to_file("ts_src.ts", data, ts_http_content_length_);
 					//_write_content_to_file(out_file_name, data, ts_http_content_length_);
 					//vvlog_i("ts_callback filename:" << out_file_name << "send data size:" << ts_http_content_length_ << "remainlen:" << 0);
-					sprintf(out_file_name, "send_ts_%d.ts", callback_times_);
-					callback_times_++;
+					//sprintf(out_file_name, "send_ts_%d.ts", callback_times_);
+					//callback_times_++;
 				}
 				char *end_char = data + ts_http_content_length_;
 				long int end_length = data_len - ts_http_content_length_;
@@ -676,8 +676,8 @@ void StreamReceiver::tsCallback(char *data, const int &data_len)
 							//_write_content_to_file("ts_src.ts", http_end_1, send_size);
 							//_write_content_to_file(out_file_name, http_end_1, send_size);
 							//vvlog_i("ts_callback send data size:" << send_size << "remainlen:" << 0);
-							sprintf(out_file_name, "send_ts_%d.ts", callback_times_);
-							callback_times_++;
+							//sprintf(out_file_name, "send_ts_%d.ts", callback_times_);
+							//callback_times_++;
 						}
 						ts_http_content_length_ -= send_size;
 						if (0 >= ts_http_content_length_)
@@ -706,7 +706,7 @@ void StreamReceiver::tsCallback(char *data, const int &data_len)
 #pragma region test
 	callback_times_++;
 	//char out_file_name[1024] = { 0 };
-	sprintf(out_file_name, "send_ts_%d.ts", callback_times_);
+	//sprintf(out_file_name, "send_ts_%d.ts", callback_times_);
 	//_write_content_to_file(out_file_name, data, data_len);
 	_write_content_to_file("ts_callbcak.dat", data, data_len);
 #pragma endregion test
@@ -809,8 +809,8 @@ void StreamReceiver::tsCallback(char *data, const int &data_len)
 	if (data && 0 < data_len)
 	{
 		callback_times_++;
-		char out_file_name[1024] = { 0 };
-		sprintf(out_file_name, "send_ts_%d.ts", callback_times_);
+		//char out_file_name[1024] = { 0 };
+		//sprintf(out_file_name, "send_ts_%d.ts", callback_times_);
 		char *end_char = strstr(data, (char*)HTTP_HEAD_END.c_str());
 		if (nullptr != end_char)
 		{

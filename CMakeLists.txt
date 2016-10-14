@@ -57,16 +57,13 @@ INCLUDE_DIRECTORIES(
     .
     ${CMAKE_CURRENT_SOURCE_DIR}/incl
     ${Boost_INCLUDE_DIRS}
-    )
-
-INCLUDE_DIRECTORIES(
     ../vistek_logger/incl
     )
+
 #动态库链接目录 note:一个目录一行
 LINK_DIRECTORIES(
     ${CMAKE_CURRENT_SOURCE_DIR/lib}
     )
-
 #文件依赖关系
 AUX_SOURCE_DIRECTORY(src DIR_SRC)
 
