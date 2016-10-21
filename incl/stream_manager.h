@@ -11,6 +11,7 @@ typedef struct MStreamContent
 {
 	StreamReceiverPtr receiver;
 	StreamSenderPtr sender;
+	std::map<std::string, IPPORT> multi_addr;
 	MStreamContent()
 		:receiver(nullptr), sender(nullptr)
 	{
@@ -41,6 +42,7 @@ private:
 	ReceiverMap receiver_;
 	SenderMap sender_;
 	StreamMap stream_map_;
+	std::mutex stream_map_mutex_;
 	std::atomic<bool> is_exit_;
 };
 #endif

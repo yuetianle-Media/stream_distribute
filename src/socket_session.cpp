@@ -79,12 +79,12 @@ int SocketSession::_connect_ex(const string & content)
 
 	if (E_OK == result)
 	{
-		vvlog_i("connect success local address:" << socket_.local_endpoint().address().to_string()\
+		//vvlog_i("connect success local address:" << socket_.local_endpoint().address().to_string()\
 << "port:" << socket_.local_endpoint().port());
 	}
 	else
 	{
-		vvlog_i("connect fail local address:" << socket_.local_endpoint().address().to_string()\
+		//vvlog_i("connect fail local address:" << socket_.local_endpoint().address().to_string()\
 << "port:" << socket_.local_endpoint().port() << "err:" << result);
 	}
 	if (socket_.is_open())
@@ -177,7 +177,7 @@ int SocketSession::_run_sync_action(coro_action operation_action, const int & ti
 		{
 			try
 			{
-				vvlog_w("time out");
+				//vvlog_w("time out");
 				if (nullptr != prom)
 				{
 					prom->set_value(E_CONN_TIMEOUT);

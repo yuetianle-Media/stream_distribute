@@ -20,11 +20,14 @@
 #include "tcpclient.h"
 #include "uri_parser.h"
 #include "m3u8Parser.h"
-
+#include "http_curl_client.h"
 using namespace pugi;
+#ifdef __linux
+#include <error.h>
+#endif
 
-typedef boost::signals2::signal<void(char *, const int&)> M3u8Signal;
-typedef boost::signals2::signal<void(char *, const long int&)> TsSignal;
+typedef boost::signals2::signal<void(char *, const long int&, const bool&)> M3u8Signal;
+typedef boost::signals2::signal<void(char *, const long int&, const bool&)> TsSignal;
 
 class StreamReceiver //: boost::signals2::trackable
 {
@@ -45,7 +48,7 @@ public:
     boost::signals2::connection subcribe_ts_callback(const TsSignal::slot_type &slot);
 
 
-	void tsCallback(char *data, const int &data_len);
+	void tsCallback(char *data, const long int &data_len, const bool&is_finished);
 private:
 	bool _find_http_header_start(char* &dest, char*src, const int src_length);
 	bool _find_http_header_end(char* &dest, char*src, const int src_length);
@@ -80,7 +83,7 @@ private:
 
 	bool _get_ts_cmd(HTTPTSCMD &cmd);
 
-	void m3u8Callback(char *data, const int &data_len);
+	void m3u8Callback(char *data, const long int &data_len, const bool &is_finished);
 
 	//void tsCallback(char *data, const int &data_len);
 
@@ -93,20 +96,15 @@ private:
 
 	void _write_content_to_file(const string &out_file_name, char *data, const int &data_len);
 private:
-	TCPClientPtr m3u8_tcp_client_ptr_;
-	TCPClientPtr ts_tcp_client_ptr_;
-
 	pugi::xml_document ts_file_doc_;
 
     TsSignal ts_send_signal_;
 
     boost::signals2::connection m3u8_conn_;/* << m3u8 data callback connection*/
     boost::signals2::connection ts_conn_;/* << ts data callback connection*/
-    std::string stream_url_;/* << uri to play a stream.*/
     std::string play_stream_;/* << http cmd to play a stream*/
     int play_stream_duration_;/*<< duration to send http cmd*/
 
-    vector<std::string> ts_file_list_;
 	std::map<std::string, int> ts_all_task_map_;/*<< task_uri, task_index*/
     boost::lockfree::queue<HTTPTSCMD, boost::lockfree::fixed_sized<true>> ts_task_list_;
 
@@ -115,22 +113,15 @@ private:
 
 	URIParser uri_parser_;
 
-	int ts_file_index_;
+	long int ts_file_index_;
 	std::atomic<int> callback_times_;
-	std::atomic<bool> ts_need_receive_;
     bool b_exit;/* << exit the thread.*/
-	std::string http_packet;/*<< one http packet buff with m3u8 data*/
-	std::string http_ts_packet_;/*<< one http packet buff with ts data*/
-	int save_content_index_;
-	std::atomic<bool> is_receive_ts_response_header_;
-	long int ts_response_content_length_;
 
 
-	//ts_callback flags
-	std::atomic<bool> is_reading_ts_http_header_;
-	std::atomic<bool> is_ts_http_content_end_;
-	std::atomic<long int> ts_http_content_length_;
-	string ts_http_cache_;//当收到的http头不完整时进行缓存
+	HTTP_CURL_CLIENT_PTR m3u8_http_client_ptr_;
+	HTTP_CURL_CLIENT_PTR ts_http_client_ptr_;
+	std::string uri_;
+	std::string m3u8_content_;
 };
 
 typedef std::shared_ptr<StreamReceiver> StreamReceiverPtr;

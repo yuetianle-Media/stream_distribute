@@ -36,7 +36,7 @@ protected:
 	coro_timer_ptr timer_ptr_;
 	int _close();
 	typedef std::function<void(const coro_promise_ptr &prom, const coro_timer_ptr &timer, boost::asio::yield_context)> coro_action;
-	int _run_sync_action(coro_action operation_action, const int &time_out);
+	int _run_sync_action(coro_action operation_action, const long int &time_out_mcro);
 };
 
 typedef std::shared_ptr<UDPSocketSession> UDPSocketSessionPtr;

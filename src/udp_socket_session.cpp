@@ -40,13 +40,13 @@ int UDPSocketSession::_close()
 	return 0;
 }
 
-int UDPSocketSession::_run_sync_action(coro_action operation_action, const int &time_out)
+int UDPSocketSession::_run_sync_action(coro_action operation_action, const long int &time_out_mcro)
 {
 	auto prom = make_shared<coro_promise>();
 	coro_timer_ptr timer(new coro_timer(*io_svt_ptr_));
 	boost::system::error_code ec;
 	auto self = shared_from_this();
-	timer->expires_from_now(std::chrono::milliseconds(time_out), ec);
+	timer->expires_from_now(std::chrono::microseconds(time_out_mcro), ec);
 	boost::asio::spawn(strand_, [this, self, prom, timer](boost::asio::yield_context yield) 
 	{
 		boost::system::error_code ec;
@@ -55,7 +55,7 @@ int UDPSocketSession::_run_sync_action(coro_action operation_action, const int &
 		{
 			return;
 		}
-		else if (timer->expires_from_now() <= std::chrono::milliseconds(0))
+		else if (timer->expires_from_now() <= std::chrono::microseconds(0))
 		{
 			try 
 			{
@@ -78,5 +78,4 @@ int UDPSocketSession::_run_sync_action(coro_action operation_action, const int &
 	boost::asio::spawn(strand_, bind(operation_action, prom, timer, placeholders::_1));
 	int result = prom->get_future().get();
 	return result;
-	return 0;
 }

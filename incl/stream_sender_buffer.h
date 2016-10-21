@@ -1,4 +1,6 @@
 #pragma once
+#include <atomic>
+#include <string.h>
 #include "errcode.h"
 
 class StreamSenderBuffer
@@ -13,9 +15,13 @@ public:
 	int reset_buffer();
 
 private:
+#ifdef WIN32
+	char data_[188 * 7 * 400];
+#else
 	char data_[188 * 7 * 200];
+#endif // _WIN32
 	char *cur_data_curosor_;
-	atomic<long int> cur_data_len_;
-	atomic<long int> remain_data_len_;
+	std::atomic<long int> cur_data_len_;
+	std::atomic<long int> remain_data_len_;
 };
 

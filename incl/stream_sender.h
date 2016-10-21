@@ -33,11 +33,12 @@ typedef struct TSPACKETCONTENT
 	}
 }TS_PACKET_CONTENT;//Ò»¸öts°ü
 
-typedef struct TS_BASIC_CONTENT
+/*typedef struct TS_BASIC_CONTENT
 {
 	int start_index;
 	int packet_num;
 };
+*/
 
 typedef struct IPPORTV
 {
@@ -61,14 +62,15 @@ public:
 
 	bool add_sender_address(const string &remote_addr, const int &port);
 	bool del_sender_address(const string &remote_addr, const int &port);
-	void stream_receive_callback(char *data, const long int &data_len);
+	void stream_receive_callback(char *data, const long int &data_len, const bool &is_finished);
 private:
 
 	void _write_content_to_file(const string &file_name, const char* data, const int &length);
-	void _parse_ts_data();
+	void _do_parse_ts_data();
 	//void _parse_ts_data(char* data, const int data_len);
 
-	void _push_data_to_ts_queue(char*data, const int &ts_packet_num, const int &send_time);
+	//void _push_data_to_ts_queue(char*data, const int &data_len, const int &send_time);
+	void _push_ts_data_to_send_queue(char *data, const long int &data_len, const int &need_time/*bytes:(188*7):micro*/);
 	void _do_send_task();
 	void _do_send_task_ext();
 	void _do_send_ts_data(char* data, const long int &data_len, const int &time);
@@ -94,6 +96,7 @@ private:
 	std::map<string, UDPClientPtr> sender_clients_list_;/*<< (ip:port):udpclient example "224.0.1.20:8000"*/
 	std::map<std::string, IPPORTPAIR> multicast_list_;
 	std::shared_ptr<std::thread> send_task_thrd_;
+	std::shared_ptr<std::thread> parse_ts_thrd_;
 	std::atomic<bool> is_exit_;
 	char *pop_address_;
 	StreamSenderBuffer sender_buffer_;
@@ -103,7 +106,8 @@ private:
 	TS_PACKET_CONTENT ts_remain_packet_;
 	int push_count_;
 	std::mutex ts_send_mtx_;
-	fstream out_ts_file;
+    std::string out_file_name_;
+	FILE * out_ts_file_;
 };
 
 typedef std::shared_ptr<StreamSender> StreamSenderPtr;

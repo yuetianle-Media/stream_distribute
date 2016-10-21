@@ -8,17 +8,21 @@ StreamSender::StreamSender()
 	, tranlate_interval_time_(0.0), pcr_duration_packet_num_(0), is_exit_(false)\
 	, pop_address_(send_buffer_), ts_packet_num_(0), pcr_front_packet_num_(0)\
 	, pcr_end_packet_num_(0), ts_send_content_queue_(12800), ts_packet_queue_(32832)\
-	, push_count_(0)
+	, push_count_(0), out_ts_file_(nullptr)
 {
-
+    out_file_name_.append(boost::posix_time::to_iso_string(boost::posix_time::second_clock::local_time())).append(".ts");
 	udp_sender_ptr = std::make_shared<UDPClient>(0, 5000);
-	//out_ts_file.open("ts.ts", ios::out | ios::binary | ios::app);
-
+	out_ts_file_ = fopen("ts.ts", "ab");
+	if (!out_ts_file_)
+	{
+		vvlog_e("ts file open faile");
+	}
 	memset(send_buffer_, 0, sizeof(send_buffer_));
 }
 
 StreamSender::~StreamSender()
 {
+	stop();
 	//if (out_ts_file.is_open())
 	//{
 	//	//out_ts_file.close();
@@ -40,8 +44,9 @@ int StreamSender::start()
 		//		item.second->connect();
 		//	}
 		//}
-		send_task_thrd_.reset(new thread(std::bind(&StreamSender::_do_send_task, this)));
-		//send_task_thrd_.reset(new thread(std::bind(&StreamSender::_do_send_task_ext, this)));
+		//send_task_thrd_.reset(new thread(std::bind(&StreamSender::_do_send_task, this)));
+		parse_ts_thrd_.reset(new thread(std::bind(&StreamSender::_do_parse_ts_data, this)));
+		send_task_thrd_.reset(new thread(std::bind(&StreamSender::_do_send_task_ext, this)));
 		return E_OK;
 	}
 }
@@ -50,37 +55,23 @@ int StreamSender::stop()
 {
 	is_exit_ = true;
 
-	for (auto item : sender_clients_list_)
-	{
-	}
 	if (send_task_thrd_ && send_task_thrd_->joinable())
 	{
 		send_task_thrd_->join();
 	}
 	send_task_thrd_ = nullptr;
+	if (parse_ts_thrd_ && parse_ts_thrd_->joinable())
+	{
+		parse_ts_thrd_->join();
+	}
+	parse_ts_thrd_ = nullptr;
 	return E_OK;
 }
 
-void StreamSender::stream_receive_callback(char *data, const long int &data_len)
+void StreamSender::stream_receive_callback(char *data, const long int &data_len, const bool &is_finished)
 {
 #pragma region  newmethod3
-	//必须确保收到的数据是完整连续的TS包
-	//v_lock(lk, ts_send_mtx_);
-	//if (out_ts_file.is_open())
-	//{
-	//	out_ts_file.write(data, data_len);
-	//	out_ts_file.flush();
-	//	if (!out_ts_file.good())
-	//	{
-	//		assert(false);
-	//	}
-	//}
-	//else
-	//{
-	//	assert(false);
-	//}
-	_write_content_to_file("ts.ts", data, data_len);
-	return;
+	//std::cout << "sender ts datalen:" << data_len << std::endl;
 	long int tmp_data_len = data_len;
 	char* tmp_data = data;
 	while (tmp_data && TS_PACKET_LENGTH_STANDARD <= tmp_data_len)
@@ -90,7 +81,14 @@ void StreamSender::stream_receive_callback(char *data, const long int &data_len)
 			int cpy_size = TS_PACKET_LENGTH_STANDARD - ts_remain_packet_.real_size;
 			memcpy(ts_remain_packet_.content + ts_remain_packet_.real_size, tmp_data, cpy_size);
 			ts_remain_packet_.real_size = TS_PACKET_LENGTH_STANDARD;
-			ts_packet_queue_.push(ts_remain_packet_);
+			if (!ts_packet_queue_.push(ts_remain_packet_))
+			{
+				vvlog_e("push ts data faile len:" << ts_remain_packet_.real_size);
+			}
+			//else
+			//{
+			//	vvlog_i("push ts data success");
+			//}
 			memset(&ts_remain_packet_, 0, sizeof(ts_remain_packet_));
 			tmp_data = tmp_data + cpy_size;
 			tmp_data_len -= cpy_size;
@@ -100,7 +98,14 @@ void StreamSender::stream_receive_callback(char *data, const long int &data_len)
 			TS_PACKET_CONTENT ts_data;
 			memcpy(ts_data.content, tmp_data, TS_PACKET_LENGTH_STANDARD);
 			ts_data.real_size = TS_PACKET_LENGTH_STANDARD;
-			ts_packet_queue_.push(ts_data);
+			if (!ts_packet_queue_.push(ts_data))
+			{
+				vvlog_e("push ts packet error len:" << ts_data.real_size);
+			}
+			//else
+			//{
+			//	vvlog_i("push ts data success");
+			//}
 			tmp_data = tmp_data + TS_PACKET_LENGTH_STANDARD;
 			tmp_data_len -= TS_PACKET_LENGTH_STANDARD;
 		}
@@ -116,7 +121,14 @@ void StreamSender::stream_receive_callback(char *data, const long int &data_len)
 				memcpy(ts_remain_packet_.content + ts_remain_packet_.real_size, tmp_data, cpy_size);
 				ts_remain_packet_.real_size = TS_PACKET_LENGTH_STANDARD;
 				tmp_data = tmp_data + cpy_size;
-				ts_packet_queue_.push(ts_remain_packet_);
+				if (!ts_packet_queue_.push(ts_remain_packet_))
+				{
+					vvlog_e("push ts packet error, len:" << ts_remain_packet_.real_size);
+				}
+				//else
+				//{
+				//	vvlog_i("push ts data success");
+				//}
 				memset(&ts_remain_packet_, 0, sizeof(ts_remain_packet_));
 				int remain_size = all_size - TS_PACKET_LENGTH_STANDARD;
 				if (0 < remain_size)
@@ -301,7 +313,7 @@ void StreamSender::stream_receive_callback(char *data, const long int &data_len)
 	//		//清空缓存数据
 	//	}
 	//}
-#pragma endregion newmethod2 
+#pragma endregion newmethod2
 #pragma region newmethod1
 	//char out_one_ts[1024] = { 0 };
 	//int inner_ts_index = 0;
@@ -437,7 +449,7 @@ void StreamSender::stream_receive_callback(char *data, const long int &data_len)
 #pragma region NewMethod
 	BYTE* data = (BYTE*)data;
 	long int tmp_data_length = data_len;
-	vvlog_i("receive data_len:" << data_len << "buffer len" << sender_buffer_.get_data_length());
+	//vvlog_i("receive data_len:" << data_len << "buffer len" << sender_buffer_.get_data_length());
 	while (data && TS_PACKET_LENGTH_STANDARD <= tmp_data_length)
 	{
 		if (ts_packet_.SetPacket((BYTE*)data))//是TS包头
@@ -447,7 +459,7 @@ void StreamSender::stream_receive_callback(char *data, const long int &data_len)
 			WORD pid = ts_packet_.Get_PID();
 			if (ts_packet_.Get_PCR_flag())
 			{
-				vvlog_i("ts pcr packet num:" << ts_packet_num_\
+				//vvlog_i("ts pcr packet num:" << ts_packet_num_\
 << "pcr_front:" << pcr_front_ << "pcr_end:" << pcr_end_);
 				if (!is_first_pcr_)
 				{
@@ -472,14 +484,14 @@ void StreamSender::stream_receive_callback(char *data, const long int &data_len)
 					if (0 < pcr_front_packet_num_)
 					{
 						int packet_num = pcr_front_packet_num_ + pcr_duration_packet_num_;
-						vvlog_i("push send data packetnum:" << packet_num << "bufferlen:" << sender_buffer_.get_data_length());
+						//vvlog_i("push send data packetnum:" << packet_num << "bufferlen:" << sender_buffer_.get_data_length());
 						_push_data_to_ts_queue(sender_buffer_.get_data()\
 							, pcr_front_packet_num_ + pcr_duration_packet_num_
 							, tranlate_interval_time_);
 					}
 					else
 					{
-						vvlog_i("push send data packetnum:" << pcr_duration_packet_num_<< "bufferlen:" << sender_buffer_.get_data_length());
+						//vvlog_i("push send data packetnum:" << pcr_duration_packet_num_<< "bufferlen:" << sender_buffer_.get_data_length());
 						_push_data_to_ts_queue(sender_buffer_.get_data()\
 							, pcr_duration_packet_num_\
 							, tranlate_interval_time_);
@@ -504,7 +516,7 @@ void StreamSender::stream_receive_callback(char *data, const long int &data_len)
 	//the last data is less than 188
 	if (data && 0 < tmp_data_length)
 	{
-		vvlog_i("remain data len:" << tmp_data_length << "data:" << data);
+		//vvlog_i("remain data len:" << tmp_data_length << "data:" << data);
 		if (ts_packet_.SetPacket((BYTE*)data))//是TS数据
 		{
 			sender_buffer_.push_to_buffer((char*)data, tmp_data_length);
@@ -532,14 +544,14 @@ void StreamSender::stream_receive_callback(char *data, const long int &data_len)
 					if (0 < pcr_front_packet_num_)
 					{
 						int packet_num = pcr_front_packet_num_ + pcr_duration_packet_num_;
-						vvlog_i("push send data packetnum:" << packet_num << "bufferlen:" << sender_buffer_.get_data_length());
+						//vvlog_i("push send data packetnum:" << packet_num << "bufferlen:" << sender_buffer_.get_data_length());
 						_push_data_to_ts_queue(sender_buffer_.get_data()\
 							, pcr_front_packet_num_ + pcr_duration_packet_num_
 							, tranlate_interval_time_);
 					}
 					else
 					{
-						vvlog_i("push send data packetnum:" << pcr_duration_packet_num_<< "bufferlen:" << sender_buffer_.get_data_length());
+						//vvlog_i("push send data packetnum:" << pcr_duration_packet_num_<< "bufferlen:" << sender_buffer_.get_data_length());
 						_push_data_to_ts_queue(sender_buffer_.get_data()\
 							, pcr_duration_packet_num_\
 							, tranlate_interval_time_);
@@ -553,7 +565,7 @@ void StreamSender::stream_receive_callback(char *data, const long int &data_len)
 		}
 		else
 		{
-			vvlog_e("remain data is not ts data ignore it!!!");
+			//vvlog_e("remain data is not ts data ignore it!!!");
 		}
 	}
 	else
@@ -565,7 +577,7 @@ void StreamSender::stream_receive_callback(char *data, const long int &data_len)
 #else
 	//stream_buffer_.pushToBuffer(data, data_len);
 #endif
-	
+
 }
 
 bool StreamSender::add_sender_address(const string &remote_addr, const int &port)
@@ -592,12 +604,44 @@ bool StreamSender::add_sender_address(const string &remote_addr, const int &port
 	//{
 	//	return false;
 	//}
-	
+
 }
 
 bool StreamSender::del_sender_address(const string &remote_addr, const int &port)
 {
 	return true;
+}
+
+void StreamSender::_push_ts_data_to_send_queue(char *data, const long int &data_len, const int &need_time/*bytes:(188*7):micro*/)
+{
+	char *tmp_data = data;
+	long int tmp_data_len = data_len;
+	TS_SEND_CONTENT ts_send_content;
+	while (TS_SEND_SIZE <= tmp_data_len)
+	{
+		memcpy(ts_send_content.content, tmp_data, TS_SEND_SIZE);
+		ts_send_content.need_time = need_time;
+		ts_send_content.real_size = TS_SEND_SIZE;
+		if (!ts_send_content_queue_.push(ts_send_content))
+		{
+			vvlog_e("push send content to queue faile!!");
+		}
+		tmp_data_len -=TS_SEND_SIZE;
+		tmp_data = tmp_data + TS_SEND_SIZE;
+		memset(&ts_send_content, 0, sizeof(ts_send_content));
+	}
+	if (0 < tmp_data_len)
+	{
+		memcpy(ts_send_content.content, tmp_data, tmp_data_len);
+		ts_send_content.need_time = (tmp_data_len*need_time) / (TS_SEND_SIZE);
+		ts_send_content.real_size = tmp_data_len;
+		if (!ts_send_content_queue_.push(ts_send_content))
+		{
+			vvlog_e("push ts send data to queue fail!");
+		}
+		
+		memset(&ts_send_content, 0, sizeof(ts_send_content));
+	}
 }
 
 //void StreamSender::_do_send_task()
@@ -627,7 +671,7 @@ bool StreamSender::del_sender_address(const string &remote_addr, const int &port
 //				}
 //				pcr_duration_packet_num_++;
 //			}
-//			
+//
 //		}
 //		this_thread::sleep_for(std::chrono::microseconds(1));
 //	}
@@ -640,18 +684,28 @@ void StreamSender::_do_send_task()
 	while (1)
 	{
 		TS_PACKET_CONTENT ts_data;
-		if (ts_packet_queue_.empty())
-			this_thread::sleep_for(chrono::microseconds(1));
-		if (!ts_packet_queue_.is_lock_free())
-			vvlog_e("queue is not lcok free!!!");
+		if (is_exit_)
+		{
+			break;
+		}
 		while (ts_packet_queue_.pop(ts_data))
 		{
+			//vvlog_i("receive datalen:" << ts_data.real_size << "data:" << std::hex << ts_data.content);
+			//if (out_ts_file_)
+			//{
+			//	fwrite(ts_data.content, 1, ts_data.real_size, out_ts_file_);
+			//}
+			//_write_content_to_file("end.ts", ts_data.content, ts_data.real_size);
 			if (ts_packet_.SetPacket((BYTE*)ts_data.content))
 			{
 				PCR packet_pcr = ts_packet_.Get_PCR();
 				WORD pid = ts_packet_.Get_PID();
-				cout << "pid:" << pid << std::endl;
-				stream_buffer_.pushToBuffer(ts_data.content, ts_data.real_size);
+				//stream_buffer_.pushToBuffer(ts_data.content, ts_data.real_size);
+				int result = sender_buffer_.push_to_buffer(ts_data.content, ts_data.real_size);
+				if (E_OK != result)
+				{
+					vvlog_e("push to sender buff fail, error:" << result);
+				}
 				pcr_duration_packet_num_++;
 				if (INVALID_PCR != packet_pcr)
 				{
@@ -671,7 +725,9 @@ void StreamSender::_do_send_task()
 						}
 						tranlate_rate_ = (double)8*pcr_duration_packet_num_*TS_PACKET_LENGTH_STANDARD / (double)(pcr_end_ - pcr_front_);
 						tranlate_interval_time_ = TS_SEND_SIZE *8/ (tranlate_rate_ * 1000) - 1;//发送188*7需要的时间
-
+                        _do_send_ts_data(sender_buffer_.get_data(), sender_buffer_.get_data_length(), tranlate_interval_time_);
+						sender_buffer_.reset_buffer();
+                        //_do_send_ts_data(stream_buffer_.data(), stream_buffer_.data_len(), tranlate_interval_time_);
 					}
 				}
 			}
@@ -679,16 +735,17 @@ void StreamSender::_do_send_task()
 			{
 				vvlog_e("invaild packet data:" << ts_data.content);
 			}
-			for (auto item : multicast_list_)
-			{
+			//for (auto item : multicast_list_)
+			/*{
 				udp_sender_ptr->write_ext(ts_data.content\
 					, ts_data.real_size\
 					, 1\
 					, item.second.ip\
 					, item.second.port);
-			}
+			}*/
 			//_write_content_to_file("ts_translate.ts", ts_data.content, ts_data.real_size);
 		}
+		this_thread::sleep_for(std::chrono::microseconds(1));
 	}
 	return;
 #pragma region test
@@ -738,15 +795,7 @@ void StreamSender::_do_send_task()
 							tranlate_rate_ = (double)8*pcr_duration_packet_num_*TS_PACKET_LENGTH_STANDARD / (double)(pcr_end_ - pcr_front_);
 							tranlate_interval_time_ = TS_SEND_SIZE *8/ (tranlate_rate_ * 1000) - 1;//发送188*7需要的时间
 							//将数据发送出去
-							for (auto udp_client_ptr : sender_clients_list_)
-							{
-								udp_sender_ptr = udp_client_ptr.second;
-								_do_send_ts_data(send_buffer_, TS_PACKET_LENGTH_STANDARD*(pcr_duration_packet_num_+1), tranlate_interval_time_);
-								//auto udp_client = udp_client_ptr.second;
-								//std::thread thrd([this, udp_client]() {
-								//	_do_send_ts_data(udp_client, send_buffer_, TS_PACKET_LENGTH_STANDARD*(pcr_duration_packet_num_ + 1), tranlate_interval_time_);
-								//});
-							}
+							_do_send_ts_data(send_buffer_, TS_PACKET_LENGTH_STANDARD*(pcr_duration_packet_num_+1), tranlate_interval_time_);
 							cout << "pid:" << pid << "ts_cout:" << pcr_duration_packet_num_ << "rate:" << tranlate_rate_ << "pcr front:" << pcr_front_ << "pcr end:" << pcr_end_ << std::endl;
 							//初始化相关变量
 							pcr_duration_packet_num_ = 0;
@@ -766,7 +815,7 @@ void StreamSender::_do_send_task()
 				pcr_duration_packet_num_++;
 				pop_address += TS_PACKET_LENGTH_STANDARD;
 			}
-			
+
 		}
 		this_thread::sleep_for(std::chrono::microseconds(1));
 	}
@@ -778,36 +827,20 @@ void StreamSender::_do_send_task_ext()
 	while (1)
 	{
 		TS_SEND_CONTENT ts_send_content;
-		if (ts_send_content_queue_.empty())
-			this_thread::sleep_for(chrono::microseconds(1));
-		if (!ts_send_content_queue_.is_lock_free())
-		{
-			vvlog_e("queue is not lockfree!!!!");
-		}
 		while (ts_send_content_queue_.pop(ts_send_content))
 		{
-			//_write_content_to_file("ts_translate.ts"\
-			//	, ts_send_content.content\
-			//	, ts_send_content.real_size);
 			for (auto item : multicast_list_)
 			{
+				//std::cout << "multi send size:" << ts_send_content.real_size\
+					<< "time:" << ts_send_content.need_time << std::endl;
 				udp_sender_ptr->write_ext(ts_send_content.content\
 					, ts_send_content.real_size\
 					, ts_send_content.need_time\
 					, item.second.ip\
 					, item.second.port);
 			}
-			//for (auto &udp_client_ptr : sender_clients_list_)
-			//{
-			//	//cout << "dataLen:" << ts_send_content.real_size << std::endl;
-			//	//vvlog_i("start send data datalen:" << ts_send_content.real_size);
-			//	if (udp_client_ptr.second)
-			//	{
-			//		udp_client_ptr.second->write_ext(ts_send_content.content, ts_send_content.real_size, ts_send_content.need_time);
-			//		//udp_client_ptr.second->write(ts_send_content.content, ts_send_content.real_size, ts_send_content.need_time);
-			//	}
-			//}
 		}
+		this_thread::sleep_for(std::chrono::microseconds(1));
 	}
 }
 
@@ -817,20 +850,36 @@ void StreamSender::_do_send_ts_data(char * data, const long int & data_len, cons
 	char *tmp_data = data;
 	while (TS_SEND_SIZE < tmp_data_len)
 	{
-		udp_sender_ptr->write(tmp_data, TS_SEND_SIZE, time);
+		//udp_sender_ptr->write(tmp_data, TS_SEND_SIZE, time);
+        for (auto item : multicast_list_)
+        {
+            udp_sender_ptr->write_ext(tmp_data\
+                , TS_SEND_SIZE\
+                , time\
+                , item.second.ip\
+                , item.second.port);
+			//cout << "udp multicast send to ip:" << item.second.ip\
+			<< "port:" << item.second.port\
+			<< "data size:" << TS_SEND_SIZE << "remain data size:" << tmp_data_len << std::endl;
+        }
 		tmp_data += TS_SEND_SIZE;
 		tmp_data_len -= TS_SEND_SIZE;
-		cout << "udp multicast send to ip:" << udp_sender_ptr->remote_ip()\
-			<< "port:" << udp_sender_ptr->remote_port()\
-			<< "data size:" << TS_SEND_SIZE << "remain data size:" << tmp_data_len << std::endl;
 	}
-	if (0 < data_len)
+	if (0 < tmp_data_len)
 	{
 		int send_time = time*tmp_data_len / TS_SEND_SIZE;
-		udp_sender_ptr->write(tmp_data, tmp_data_len, send_time);
-		cout << "udp multicast send to ip:" << udp_sender_ptr->remote_ip()\
-			<< "port:" << udp_sender_ptr->remote_port()\
-			<< "data size:" << tmp_data_len << "remain data size:"<< tmp_data_len << std::endl;
+		//udp_sender_ptr->write(tmp_data, tmp_data_len, send_time);
+        for (auto item : multicast_list_)
+        {
+            udp_sender_ptr->write_ext(tmp_data\
+                , tmp_data_len\
+                , send_time\
+                , item.second.ip\
+                , item.second.port);
+			//cout << "udp multicast send to ip:" << item.second.ip\
+				<< "port:" << item.second.port\
+				<< "data size:" << tmp_data_len << "remain data size:"<< tmp_data_len << std::endl;
+        }
 	}
 }
 
@@ -863,7 +912,15 @@ void StreamSender::_write_content_to_file(const string &file_name, const char* d
 	FILE *open_file = fopen(file_name.c_str(), "ab");
 	if (open_file)
 	{
+		if (10 < length)
+		{
+			if (*data == 0x00 && *(data + 1) == 0x00 && *(data + 3) == 0x00 && *(data + 5) == 0x00 && *(data + 9) == 0)
+			{
+				assert(false);
+			}
+		}
 		int write_size = fwrite(data, sizeof(char), length, open_file);
+		fflush(open_file);
 		if (0 > write_size)
 		{
 			assert(false);
@@ -872,6 +929,11 @@ void StreamSender::_write_content_to_file(const string &file_name, const char* d
 	}
 	else
 	{
+#ifdef _WIN32
+		std::cout << file_name <<" file open error:" << GetLastError() << std::endl;
+#else
+		perror("file open error");
+#endif // _DEBUG
 		assert(false);
 	}
 	return;
@@ -889,66 +951,82 @@ void StreamSender::_write_content_to_file(const string &file_name, const char* d
 	{
 		std::cout << "open file bad " << std::endl;
 	}
-	
+
 }
 
-void StreamSender::_parse_ts_data()
+void StreamSender::_do_parse_ts_data()
 {
-	char *pop_address = send_buffer_;
+	StreamSenderBuffer sender_buffer;
+	CTsPacket ts_packet;
+	TS_PACKET_CONTENT ts_data;
+	long int ts_packet_num = 0;
+
+	long int pcr_first_packet_num = 0;//找到第一包PCR收到的数据包
+	long int pcr_second_packet_num = 0;//找到第二包PCR收到的数据包
+	long int pcr_duration_packet_num = 0;
+	long int pcr_front = 0;
+	long int pcr_end = 0;
+	long int max_pcr = 0;
+	bool is_find_first_pcr = false;
 	while (1)
 	{
-		if (stream_buffer_.is_empty())
+		while (ts_packet_queue_.pop(ts_data))
 		{
-			this_thread::sleep_for(std::chrono::microseconds(1));
-			continue;;
-		}
-		//pop的数据是完整的一个TS包 如果不是会存在问题
-		if (pop_address)
-		{
-			stream_buffer_.pop_data(pop_address, sender_buffer_remain_size_, TS_PACKET_LENGTH_STANDARD);
-			if (ts_packet_.SetPacket((BYTE*)pop_address))
+			//int write_count = fwrite(ts_data.content, 1, ts_data.real_size, out_ts_file_);
+			//if (0 >= write_count)
+			//{
+			//	vvlog_e("write file error");
+			//}
+			if (ts_packet.SetPacket((BYTE*)ts_data.content))
 			{
-				if (ts_packet_.Get_PCR_flag())
+				PCR packet_pcr = ts_packet.Get_PCR();
+				WORD pid = ts_packet.Get_PID();
+				int result = sender_buffer.push_to_buffer(ts_data.content, ts_data.real_size);
+				if (E_OK != result)
 				{
-					WORD pid = ts_packet_.Get_PID();
-					if (!is_first_pcr_)
+					vvlog_e("push to sender buff fail, error:" << result);
+				}
+				ts_packet_num++;
+				if (INVALID_PCR != packet_pcr)
+				{
+					if (!is_find_first_pcr)//
 					{
-						pcr_front_ = ts_packet_.Get_PCR();
-						is_first_pcr_ = true;
+						is_find_first_pcr = true;
+						pcr_front = pcr_end = packet_pcr;
+						pcr_first_packet_num = ts_packet_num;
 					}
 					else
 					{
-						pcr_front_ = pcr_end_;
-						pcr_end_ = ts_packet_.Get_PCR();
-						tranlate_rate_ = 8*pcr_duration_packet_num_*TS_PACKET_LENGTH_STANDARD / (pcr_end_ - pcr_front_);
-						tranlate_interval_time_ = TS_SEND_SIZE *8/ tranlate_rate_ * 1000 - 1;//发送188*7需要的时间
-						//将数据发送出去
-						pcr_duration_packet_num_ = 0;
-						sender_buffer_remain_size_ = sizeof(send_buffer_);
-						memset(send_buffer_, 0, sizeof(send_buffer_));//清空buffer
-						pop_address = send_buffer_;
-						return;
+						pcr_front = pcr_end;
+						pcr_end = packet_pcr;
+						if (pcr_end < pcr_front)
+						{
+							max_pcr = pcr_front;
+							pcr_front = 0;
+						}
+						pcr_second_packet_num = ts_packet_num;
+						pcr_duration_packet_num = pcr_second_packet_num - pcr_first_packet_num;
+						long int system_clock_reference = 27;
+						double tranlate_rate = (double)(8 * pcr_duration_packet_num*TS_PACKET_LENGTH_STANDARD*system_clock_reference) / (pcr_end - pcr_front);
+						double tranlate_interval_time = (double)(188 * 7 * 8) / (long)(1000 * tranlate_rate);//发送188*7需要的时间
+						std::cout << "first_pcr:" << pcr_front << "pcr_end:" << pcr_end\
+							<< "rate:" << tranlate_rate << "time:" << tranlate_interval_time << std::endl;
+						pcr_first_packet_num = pcr_second_packet_num = ts_packet_num = 0;
+						_push_ts_data_to_send_queue(sender_buffer.get_data(), sender_buffer.get_data_length(), tranlate_interval_time);
+						sender_buffer.reset_buffer();
 					}
-					cout << "pid:" << pid << "ts_cout:" << pcr_duration_packet_num_\
-<< "pcr front:" << pcr_front_ << "pcr end:" << pcr_end_ <<std::endl;
-				}
-				if (ts_packet_.Get_adaptation_field_control())
-				{
-					cout << "pid:" << ts_packet_.Get_PID() << " has adaption field" << std::endl;
 				}
 			}
 			else
 			{
-				cout << "first:"<< hex << pop_address[0] << "" << std::endl;
+				vvlog_e("it is a invalid packet!!");
 			}
-			pcr_duration_packet_num_++;
-			pop_address += TS_PACKET_LENGTH_STANDARD;
 		}
-		this_thread::sleep_for(std::chrono::microseconds(1));
+		this_thread::sleep_for(std::chrono::nanoseconds(1));
 	}
 }
 
-void StreamSender::_push_data_to_ts_queue(char*data, const int &ts_packet_num, const int &send_time)
+/*void StreamSender::_push_data_to_ts_queue(char*data, const int &data_len, const int &send_time)
 {
 	TS_SEND_CONTENT ts_send_content;
 	int tmp_packet_num = ts_packet_num;
@@ -969,6 +1047,6 @@ void StreamSender::_push_data_to_ts_queue(char*data, const int &ts_packet_num, c
 		ts_send_content.real_size = tmp_packet_num*TS_PACKET_LENGTH_STANDARD;
 		ts_send_content_queue_.push(ts_send_content);
 	}
-		
 }
+*/
 

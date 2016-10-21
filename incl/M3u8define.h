@@ -1,6 +1,8 @@
 #pragma once
 #include <string>
 #include <map>
+#include <vector>
+using namespace std;
 
 const std::string M3U8_EXT_X_TARGETDURAION = "#EXT-X-TARGETDURATION";
 const std::string M3U8_EXT_X_MEDIDA_SEQUENCE = "#MEDIDA-SEQUENCE";

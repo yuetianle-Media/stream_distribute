@@ -1,22 +1,54 @@
 #include "stdafx.h"
 #include "test_stream_receiver.h"
 #include <iostream>
-inline void receive_ts_data(char *data, const int&data_len)
+
+
+static FILE *open_file = fopen("ts.ts", "ab");
+inline void write_content_to_file(const string &out_file_name, char *data, const int &data_len)
 {
-	fstream out_file;
-	out_file.open("out.ts", ios::out | ios::binary | ios::app);
-	out_file.write(data, data_len);
-	out_file.close();
+	if (open_file)
+	{
+		int write_size = fwrite(data, sizeof(char), data_len, open_file);
+		if (0 > write_size)
+		{
+#ifdef _WIN32
+		std::cout << " file write error:" << GetLastError() << std::endl;
+#else
+		perror("file write error");
+#endif // _DEBUG
+		}
+		fflush(open_file);
+	}
+	else
+	{
+#ifdef _WIN32
+		std::cout << out_file_name <<" file open error:" << GetLastError() << std::endl;
+#else
+		//vvlog_e("open file:" << out_file_name << "error:" << errno);
+		perror("file open error");
+#endif // _DEBUG
+	}
+}
+inline void receive_ts_data(char *data, const int&data_len, const bool &is_finished)
+{
+	write_content_to_file("ts.ts", data, data_len);
+	//std::cout << "ts dataLen:" << data_len << "isfinished:" << is_finished << std::endl;
+	//fstream out_file;
+	//out_file.open("out.ts", ios::out | ios::binary | ios::app);
+	//out_file.write(data, data_len);
+	//out_file.close();
 };
 void test_stream_receive(const std::string &url)
 {
 	StreamReceiver stream_receiver(url);
+	HttpCurlClient::init();
 	stream_receiver.start();
-	stream_receiver.subcribe_ts_callback(boost::bind(receive_ts_data,_1,_2));
+	stream_receiver.subcribe_ts_callback(boost::bind(receive_ts_data,_1,_2, _3));
 	while (1)
 	{
 		this_thread::sleep_for(std::chrono::seconds(5));
 	}
+	HttpCurlClient::uninit();
 };
 
 void test_stream_ts_callback(const std::string &ts_file_name)
@@ -30,7 +62,7 @@ void test_stream_ts_callback(const std::string &ts_file_name)
 		char ts_data[32768] = { 0 };
 		if (in_stream.read(ts_data, 32768))
 		{
-			stream_receiver.tsCallback(ts_data, 32768);
+			//stream_receiver.tsCallback(ts_data, 32768);
 		}
 	}
 }

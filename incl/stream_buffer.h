@@ -18,6 +18,8 @@ class StreamBuffer: public std::enable_shared_from_this<StreamBuffer>
         int pushToBuffer(const char *content, const int &size);
 		bool  pop_data(char *dest, const int &dest_len, const int &data_len);
 		bool is_empty();
+        char* data() { return (char*)data_.data(); }
+		const long int data_len() const { return data_.size(); }
     private:
         std::atomic<int> current_index_;
         std::atomic<int> data_size_;

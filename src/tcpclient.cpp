@@ -91,7 +91,7 @@ int TCPClient::async_send(const char *content, const int &length)
 	//boost::asio::async_write(socket_, boost::asio::buffer(content, length));
 	if (result != E_OK)
 	{
-		vvlog_e("send cmd end faile cmd:" << content << "errcode:" << result);
+		//vvlog_e("send cmd end faile cmd:" << content << "errcode:" << result);
 		//_close();
 		return E_CONN_ERROR;
 	}
@@ -165,16 +165,18 @@ int TCPClient::wait_response()
 						{
 							//vvlog_i("send data size:" << sz);
 							std::cout << "receive data size:" << sz << " port:" << socket_.local_endpoint().port() << std::endl;
-							data_send_signal_((char*)req.c_str(), sz);
+							data_send_signal_((char*)req.data(), sz);
+							std::cout << "data:" << req.data();
+							std::cout << "receive data end size:" << sz << " port:" << socket_.local_endpoint().port() << std::endl;
 						}
 						else
 						{
-							vvlog_e("data signal slot empty");
+							//vvlog_e("data signal slot empty");
 						}
 					}
 					catch (std::exception &e)
 					{
-						vvlog_e("data receive error" << e.what());
+						//vvlog_e("data receive error" << e.what());
 					}
 				}
 				else
@@ -184,7 +186,7 @@ int TCPClient::wait_response()
 			}
 			else
 			{
-				vvlog_e("connect is brokent value:" << ec.value()\
+				//vvlog_e("connect is brokent value:" << ec.value()\
 					<< "mesg:" << ec.message() << "address:"\
 					<< socket_.local_endpoint().address().to_string()\
 					<< "port:" << socket_.local_endpoint().port());
@@ -214,7 +216,7 @@ int TCPClient::_send(const char * content, const int & length, boost::asio::yiel
 	boost::asio::async_write(socket_, boost::asio::buffer(content, length), yield[ec]);
 	if (ec)
 	{
-		vvlog_e("send fail error msg:" << ec.message());
+		//vvlog_e("send fail error msg:" << ec.message());
 		_close();
 		return E_SEND_ERROR;
 	}
@@ -255,7 +257,7 @@ int TCPClient::_receive(const int & size, boost::asio::yield_context yield)
 
 void TCPClient::unsubcribe_data_callback(boost::signals2::connection &subcriber)
 {
-	vvlog_i("signal slot num:" << data_send_signal_.num_slots());
+	//vvlog_i("signal slot num:" << data_send_signal_.num_slots());
 	data_send_signal_.disconnect_all_slots();
     //subcriber.disconnect();
 }

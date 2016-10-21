@@ -52,6 +52,17 @@ if (NOT Boost_FOUND)
     message("not found boost")
 endif()
 
+#curl 设置
+SET(requiredlibs)
+FIND_PACKAGE(CURL)
+if(CURL_FOUND)
+    message("curl foud")
+    INCLUDE_DIRECTORIES($(CURL_INCLUDE_DIR))
+    SET(requiredlibs ${requiredlibs} ${CURL_LIBRARIES})
+ELSE(CURL_FOUND)
+    message(FATAL_ERROR "could not find curl library")
+ENDIF(CURL_FOUND)
+
 #头文件包含目录 note:一个目录一行
 INCLUDE_DIRECTORIES(
     .
@@ -78,4 +89,5 @@ ADD_EXECUTABLE(${PROJECT_NAME} ${DIR_SRC})
 #SET_TARGET_PROPERTIES(${PROJECT_NAME} PROPERTIES VERSION 1.1 SOVERSION 1)
 
 #链接其他动态库
-TARGET_LINK_LIBRARIES(${PROJECT_NAME} ${Boost_LIBRARIES} vistek_logger)
+#TARGET_LINK_LIBRARIES(${PROJECT_NAME} ${Boost_LIBRARIES} vistek_logger)
+TARGET_LINK_LIBRARIES(${PROJECT_NAME} ${Boost_LIBRARIES} ${requiredlibs} vistek_logger)

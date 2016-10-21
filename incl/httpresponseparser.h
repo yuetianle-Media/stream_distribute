@@ -51,7 +51,7 @@ private:
 
     ParseResult consume(Response &resp, const char *begin, const char *end)
     {
-        while( begin != end )
+        while( begin != end)
         {
             char input = *begin++;
 

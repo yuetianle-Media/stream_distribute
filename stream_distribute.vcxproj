@@ -59,18 +59,22 @@
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
     <Import Project="boost.props" />
+    <Import Project="curl.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
     <Import Project="boost.props" />
+    <Import Project="curl.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
     <Import Project="boost.props" />
+    <Import Project="curl.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
     <Import Project="boost.props" />
+    <Import Project="curl.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -103,6 +107,7 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(SolutionDir)..\__output</AdditionalLibraryDirectories>
+      <AdditionalDependencies>ws2_32.lib;winmm.lib;wldap32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -135,6 +140,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(SolutionDir)..\__output</AdditionalLibraryDirectories>
+      <AdditionalDependencies>ws2_32.lib;winmm.lib;wldap32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -162,6 +168,7 @@
     <ClInclude Include="incl\dvb.h" />
     <ClInclude Include="incl\errcode.h" />
     <ClInclude Include="incl\httpresponseparser.h" />
+    <ClInclude Include="incl\http_curl_client.h" />
     <ClInclude Include="incl\http_flags.h" />
     <ClInclude Include="incl\m3u8define.h" />
     <ClInclude Include="incl\m3u8Parser.h" />
@@ -180,7 +187,9 @@
     <ClInclude Include="incl\stream_sender.h" />
     <ClInclude Include="incl\stream_sender_buffer.h" />
     <ClInclude Include="incl\tcpclient.h" />
+    <ClInclude Include="incl\test_http_curl_client.h" />
     <ClInclude Include="incl\test_rule_manager.h" />
+    <ClInclude Include="incl\test_stream_manager.h" />
     <ClInclude Include="incl\test_stream_receiver.h" />
     <ClInclude Include="incl\test_stream_sender.h" />
     <ClInclude Include="incl\test_udp_client.h" />
@@ -191,9 +200,9 @@
     <ClInclude Include="incl\ztypes.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="targetver.h" />
-    <ClInclude Include="test_stream_manager.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="src\http_curl_client.cpp" />
     <ClCompile Include="src\m3u8parser.cpp" />
     <ClCompile Include="src\pat_pmt.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>

@@ -16,10 +16,13 @@
 #define _ENABLE_ATOMIC_ALIGNMENT_FIX 
 #endif // WIN32
 
+#define ENABLE_LOG 1
+#ifdef ENABLE_LOG
 #include "vistek_logger.h"
 #ifndef __LOG_SOURCE__
 #define __LOG_SOURCE__ "stream_distribute"
 #endif
+#endif 
 
 
 // TODO:  在此处引用程序需要的其他头文件
