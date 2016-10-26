@@ -15,20 +15,15 @@ TCPClient::~TCPClient()
 int TCPClient::send(const char *content, const int &length)
 {
 	boost::system::error_code ec;
-	if (timer_ptr_)
-	{
-		timer_ptr_->expires_from_now(std::chrono::milliseconds(timeout_), ec);
-	}
 	boost::asio::write(socket_, boost::asio::buffer(content, length));
 	if (ec)
 	{
+		cout << "send fail ip:" << remote_addr_.address().to_string()\
+			<< "port:" << remote_addr_.port() << "size:" << length << std::endl;
 		_close();
+		return E_SEND_ERROR;
 	}
-	else
-	{
-		cout << "send size:" << length << std::endl;
-	}
-	return 0;
+	return E_OK;
 }
 
 

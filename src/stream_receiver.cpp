@@ -19,17 +19,15 @@ StreamReceiver::StreamReceiver(const string &url)
 
 StreamReceiver::~StreamReceiver()
 {
+	b_exit = true;
 	std::cout << "come desctruct Stream receiver" << std::endl;
 }
 
 int StreamReceiver::start()
 {
-	//vvlog_i("stream_receive start");
 	if (nullptr != m3u8_thrd_ptr_ && nullptr != ts_thrd_ptr_)
 	{
-		//std::cout << "m3u8 and ts thread is started m3u8 thread id:" << m3u8_thrd_ptr_->get_id()\
-			<< "ts thread id:" << ts_thrd_ptr_->get_id() << endl;
-		//vvlog_w("m3u8 and ts thread is started m3u8 thread id:" << m3u8_thrd_ptr_->get_id()\
+		vvlog_w("m3u8 and ts thread is started m3u8 thread id:" << m3u8_thrd_ptr_->get_id()\
 			<< "ts thread id:" << ts_thrd_ptr_->get_id());
 		return E_OK;
 	}
@@ -44,15 +42,16 @@ int StreamReceiver::start()
 	}
 	m3u8_thrd_ptr_.reset(new std::thread(std::bind(&StreamReceiver::_do_m3u8_task, this)));
 	ts_thrd_ptr_.reset(new std::thread(std::bind(&StreamReceiver::_do_ts_task, this)));
-    if (nullptr != m3u8_thrd_ptr_)
-    {
-        m3u8_thrd_ptr_->detach();
-    }
-    if (nullptr != ts_thrd_ptr_)
-    {
-        ts_thrd_ptr_->detach();
-    }
-	return E_OK;
+	if (m3u8_thrd_ptr_ && ts_thrd_ptr_)
+	{
+		vvlog_i("start receive stream success url:" << uri_);
+		return E_OK;
+	}
+	else
+	{
+		vvlog_e("start receive stream fail url:" << uri_);
+		return E_PARAM_ERROR;
+	}
 }
 
 void StreamReceiver::stop()
@@ -65,15 +64,18 @@ void StreamReceiver::stop()
 	{
 		ts_http_client_ptr_->unsubscribe_data();
 	}
-    if (nullptr != m3u8_thrd_ptr_)
-    {
-        //m3u8_thrd_ptr_->stop();
-    }
-    if (nullptr != ts_thrd_ptr_)
-    {
-        //ts_thrd_ptr_->start();
-    }
-
+	b_exit = true;
+	if (m3u8_thrd_ptr_ && m3u8_thrd_ptr_->joinable())
+	{
+		m3u8_thrd_ptr_->join();
+	}
+	m3u8_thrd_ptr_ = nullptr;
+	if (ts_thrd_ptr_ && ts_thrd_ptr_->joinable())
+	{
+		ts_thrd_ptr_->join();
+	}
+	ts_thrd_ptr_ = nullptr;
+	vvlog_i("stop receive stream url:" << uri_);
 }
 
 
@@ -230,6 +232,7 @@ int StreamReceiver::_send_m3u8_cmd(const string &m3u8_cmd)
 	int result = E_OK;
 	if (m3u8_http_client_ptr_)
 	{
+		vvlog_i("send m3u8 cmd:" << m3u8_cmd);
 		result = m3u8_http_client_ptr_->get(m3u8_cmd);
 		if (E_OK != result)
 		{
@@ -250,6 +253,7 @@ int StreamReceiver::_send_ts_cmd(const string &ts_cmd)
 	int result = E_OK;
     if (nullptr != ts_http_client_ptr_)
     {
+		vvlog_i("send ts cmd:" << ts_cmd);
 		result = ts_http_client_ptr_->get(ts_cmd);
 		if (E_OK != result)
 		{
@@ -307,8 +311,8 @@ int StreamReceiver::_push_ts_cmd(const string &ts_cmd_str)
 	std::map<string, int>::iterator iter = ts_all_task_map_.find(ts_cmd_str);
 	if (iter == ts_all_task_map_.end())//此任务没有添加过
 	{
-		//vvlog_i("push ts task cout:" << ts_all_task_map_.size() << "task:" << ts_cmd_str);
-		cout << "push ts task cout:" << ts_all_task_map_.size() << "task:" << ts_cmd_str << std::endl;
+		vvlog_i("push ts task cout:" << ts_all_task_map_.size() << "task:" << ts_cmd_str);
+		//cout << "push ts task cout:" << ts_all_task_map_.size() << "task:" << ts_cmd_str << std::endl;
 		_write_ts_file_list("task.xml", ts_cmd_str, 0);
 		ts_all_task_map_.insert(std::make_pair(ts_cmd_str, ts_file_index_++));
 		ts_task_list_.push(ts_cmd);
@@ -1058,8 +1062,13 @@ int StreamReceiver::_do_ts_task()
 		{
 			_send_ts_cmd(ts_cmd_struct.cmd);
 		}
+		if (b_exit)
+		{
+			break;
+		}
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
+	return E_OK;
 }
 
 void StreamReceiver::_write_ts_file_list(const string &out_file_name, const string &ts_file_name, const int &index)
@@ -1130,5 +1139,10 @@ void StreamReceiver::_write_content_to_file(const string &out_file_name, char *d
 	{
 		std::cout << "open file:" << out_file_name << " faile!!!";
 	}
+}
+
+void StreamReceiver::unsubcribe_ts_callback()
+{
+	ts_send_signal_.disconnect_all_slots();
 }
 

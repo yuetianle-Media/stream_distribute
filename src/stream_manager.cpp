@@ -58,7 +58,26 @@ void StreamManager::_do_add_tasks_callback()
 			TASKCONTENT task_content;
 			while (rules_manager_->get_task(task_content))
 			{
-				_do_add_task(task_content);
+				std::string multi_addr;
+				std::ostringstream ss_out;
+				for (int index=0; index < task_content.addr_cout; index++)
+				{
+					ss_out << task_content.remote_addr_list[index].ip\
+						<< ":" << task_content.remote_addr_list[index].port << ";";
+				}
+				multi_addr = ss_out.str();
+				if (_do_add_task(task_content))
+				{
+					vvlog_i("add stream task success url:" << task_content.url\
+						<< "multiaddress cout:" << task_content.addr_cout\
+						<< "address:" << multi_addr);
+				}
+				else
+				{
+					vvlog_e("add stream task fail url:" << task_content.url\
+						<< "multiaddress cout:" << task_content.addr_cout\
+						<< "address:" << multi_addr);
+				}
 			}
 			this_thread::sleep_for(chrono::milliseconds(1));
 			if (is_exit_)
@@ -78,7 +97,25 @@ void StreamManager::_do_del_tasks_callback()
 			TASKCONTENT task_content;
 			while (rules_manager_->get_del_task(task_content))
 			{
-				_do_remove_task(task_content);
+				std::string multi_addr;
+				std::ostringstream ss_out;
+				for (auto item : task_content.remote_addr_list)
+				{
+					ss_out << item.ip << ":" << item.port;
+				}
+				multi_addr = ss_out.str();
+				if (_do_remove_task(task_content))
+				{
+					vvlog_i("del stream task success url:" << task_content.url\
+						<< "multiaddress cout:" << task_content.addr_cout\
+						<< "address:" << multi_addr);
+				}
+				else
+				{
+					vvlog_e("del stream task fail url:" << task_content.url\
+						<< "multiaddress cout:" << task_content.addr_cout\
+						<< "address:" << multi_addr);
+				}
 			}
 			this_thread::sleep_for(chrono::milliseconds(1));
 			if (is_exit_)
@@ -95,34 +132,58 @@ bool StreamManager::_do_add_task(const TASKCONTENT &task_content)
 	StreamReceiverPtr receiver_ptr = nullptr;
 	StreamSenderPtr sender_ptr = nullptr;
 	StreamContent stream_content;
-	if (0 < strlen(task_content.url))
+	v_lock(lk, stream_map_mutex_);
+	if (0 >= strlen(task_content.url))
 	{
-		 receiver_ptr = make_shared<StreamReceiver>(task_content.url);
+		return false;
 	}
-	if (0 < task_content.addr_cout)
+	StreamMap::iterator iter = stream_map_.find(task_content.url);
+	if (iter == stream_map_.end())//没有此视频流
 	{
-		sender_ptr = make_shared<StreamSender>();
+		receiver_ptr = make_shared<StreamReceiver>(task_content.url);
+		if (0 < task_content.addr_cout)
+		{
+			sender_ptr = make_shared<StreamSender>();
+			sender_ptr->set_delay_time(task_content.delay_time_ms);
+			sender_ptr->set_receive_url(task_content.url);
+			for (int index = 0; index < task_content.addr_cout; index++)
+			{
+				sender_ptr->add_sender_address(task_content.remote_addr_list[index].ip\
+					, task_content.remote_addr_list[index].port);
+				char ip_port_id[100] = { 0 };
+				sprintf(ip_port_id, "%s:%d", task_content.remote_addr_list[index].ip\
+					, task_content.remote_addr_list[index].port);
+				stream_content.multi_addr.insert(std::make_pair(ip_port_id, task_content.remote_addr_list[index]));
+			}
+			if (receiver_ptr)
+				receiver_ptr->start();
+			if (sender_ptr)
+				sender_ptr->start();
+			if (receiver_ptr && sender_ptr)
+			{
+				stream_content.sender = sender_ptr;
+				stream_content.receiver = receiver_ptr;
+				receiver_ptr->subcribe_ts_callback(boost::bind(&StreamSender::stream_receive_callback, sender_ptr, _1, _2,_3));
+				stream_map_.insert(std::make_pair(task_content.url, stream_content));
+			}
+		}
+		else//没有转发组播IP
+		{
+			return false;
+		}
 	}
-	for (int index = 0; index < task_content.addr_cout; index++)
+	else
 	{
-		sender_ptr->add_sender_address(task_content.remote_addr_list[index].ip\
-			, task_content.remote_addr_list[index].port);
-		char ip_port_id[100] = { 0 };
-		sprintf(ip_port_id, "%s:%d", task_content.remote_addr_list[index].ip\
-			, task_content.remote_addr_list[index].port);
-		stream_content.multi_addr.insert(std::make_pair(ip_port_id, task_content.remote_addr_list[index]));
-	}
-	if (receiver_ptr)
-		receiver_ptr->start();
-	if (sender_ptr)
-		sender_ptr->start();
-	if (receiver_ptr && sender_ptr)
-	{
-		stream_content.sender = sender_ptr;
-		stream_content.receiver = receiver_ptr;
-		receiver_ptr->subcribe_ts_callback(boost::bind(&StreamSender::stream_receive_callback, sender_ptr, _1, _2,_3));
-		v_lock(lk, stream_map_mutex_);
-		stream_map_.insert(std::make_pair(task_content.url, stream_content));
+		sender_ptr = iter->second.sender;
+		for (int index = 0; index < task_content.addr_cout; index++)
+		{
+			sender_ptr->add_sender_address(task_content.remote_addr_list[index].ip\
+				, task_content.remote_addr_list[index].port);
+			char ip_port_id[100] = { 0 };
+			sprintf(ip_port_id, "%s:%d", task_content.remote_addr_list[index].ip\
+				, task_content.remote_addr_list[index].port);
+			iter->second.multi_addr.insert(std::make_pair(ip_port_id, task_content.remote_addr_list[index]));
+		}
 	}
 	return true;
 }
@@ -133,14 +194,19 @@ bool StreamManager::_do_remove_task(const TASKCONTENT &task_content)
 	StreamMap::iterator iter = stream_map_.find(task_content.url);
 	if (iter != stream_map_.end())
 	{
-
+		int multi_ip_count = iter->second.multi_addr.size();
 		for (int task_index = 0; task_index < task_content.addr_cout; task_index++)
 		{
 			iter->second.sender->del_sender_address(\
 				task_content.remote_addr_list[task_index].ip\
 				, task_content.remote_addr_list[task_index].port);
+
+			char ip_port_id[100] = { 0 };
+			sprintf(ip_port_id, "%s:%d", task_content.remote_addr_list[task_index].ip\
+			, task_content.remote_addr_list[task_index].port);
+			iter->second.multi_addr.erase(ip_port_id);//删除流的多播地址
 		}
-		if (task_content.addr_cout == iter->second.multi_addr.size())//无转发任务
+		if (task_content.addr_cout == multi_ip_count)//无转发任务
 		{
 			iter->second.receiver->stop();
 			iter->second.sender->stop();

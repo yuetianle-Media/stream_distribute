@@ -30,8 +30,9 @@ struct TASKCONTENT
 	char url[256];
 	IPPORT remote_addr_list[MAX_DISTRIBUTE];
 	int addr_cout;
+	int delay_time_ms;
 	TASKCONTENT()
-		:addr_cout(0)
+		:addr_cout(0), delay_time_ms(0)
 	{
 		memset(url, 0, sizeof(TASKCONTENT));
 	}
@@ -46,7 +47,9 @@ typedef struct MRULECONTENT
 {
 	char url[256];
 	IPPORT remote_addr;
+	int delay_time_ms;
 	MRULECONTENT()
+		:delay_time_ms(0)
 	{
 		memset(url, 0, sizeof(url));
 	}
@@ -59,6 +62,7 @@ class RuleManager :public std::enable_shared_from_this<RuleManager>
 	const char *URL_ATTR_NAME = "url";
 	const char *IP_ATTR_NAME = "ip";
 	const char *PORT_ATTR_NAME = "port";
+	const char *URL_ATTR_DELAY_TIME = "delay_time";
 public:
 	RuleManager(const std::string &config_file);
 	~RuleManager();

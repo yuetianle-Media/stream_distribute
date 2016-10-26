@@ -47,7 +47,7 @@ public:
      */
     boost::signals2::connection subcribe_ts_callback(const TsSignal::slot_type &slot);
 
-
+	void unsubcribe_ts_callback();
 	void tsCallback(char *data, const long int &data_len, const bool&is_finished);
 private:
 	bool _find_http_header_start(char* &dest, char*src, const int src_length);
@@ -115,7 +115,7 @@ private:
 
 	long int ts_file_index_;
 	std::atomic<int> callback_times_;
-    bool b_exit;/* << exit the thread.*/
+    atomic<bool> b_exit;/* << exit the thread.*/
 
 
 	HTTP_CURL_CLIENT_PTR m3u8_http_client_ptr_;

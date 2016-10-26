@@ -18,7 +18,7 @@ private:
 #ifdef WIN32
 	char data_[188 * 7 * 400];
 #else
-	char data_[188 * 7 * 200];
+	char data_[188 * 7 * 400];
 #endif // _WIN32
 	char *cur_data_curosor_;
 	std::atomic<long int> cur_data_len_;

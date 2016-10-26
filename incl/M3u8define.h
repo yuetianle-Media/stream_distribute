@@ -39,3 +39,24 @@ typedef struct M3U8Struct
 
 	}
 }M3U8Data;
+
+struct M3u8VideoSegment
+{
+	std::string uri;
+	std::string title;/*<< title attribute from EXTINF parameter*/
+	std::string program_data_time;/*<< EXT-X-PROGRAM-DATE-TIME*/
+	bool discontinuity;/*<< EXT-X-DISCONTINUITY*/
+	bool cue_out;/*<< EXT-X-CUE-OUT_CONT*/
+	std::string scte35;
+	std::string scte35_duration;
+	float duration;/*<< duration attribute from EXTINF parameter*/
+	std::string base_uri;
+	long int video_size;/*<< byterange attribute from EXT-X-BYTERANGE paramter*/
+	long int video_data_offset;/*<< byterange attribute from EXT-X-BYTERANGE paramter*/
+	std::string key;/*<< key used to encrypt the segment (EXT-X-KEY)*/
+	M3u8VideoSegment()
+		:discontinuity(false), cue_out(false), duration(0.0f)\
+		, video_size(0), video_data_offset(0)
+	{
+	}
+};

@@ -37,6 +37,11 @@ int RuleManager::_load_config_file(const string &config_file)
 		{
 			TASKCONTENT task_content;
 			string url = it->attribute((char*)(RuleManager::URL_ATTR_NAME)).as_string();
+			pugi::xml_attribute delay_time_attr = it->attribute((char*)(RuleManager::URL_ATTR_DELAY_TIME));
+			if (delay_time_attr)
+			{
+				task_content.delay_time_ms = delay_time_attr.as_int();
+			}
 			memcpy(task_content.url, url.data(), url.length());
 			int ip_index = 0;
 			int real_ip_index = 0;
@@ -109,6 +114,12 @@ int RuleManager::_load_config_file(const string &config_file, RULECONTENTTYPE &c
 		for (pugi::xml_node_iterator it = root_node.begin(); it != root_node.end(); it++)
 		{
 			string url = it->attribute((char*)(RuleManager::URL_ATTR_NAME)).as_string();
+			pugi::xml_attribute delay_time_attr =  it->attribute((char*)(RuleManager::URL_ATTR_DELAY_TIME));
+			int delay_time = 0;
+			if (delay_time_attr)
+			{
+				 delay_time = delay_time_attr.as_int();
+			}
 			int ip_index = 0;
 			for (pugi::xml_node_iterator ip_node = it->begin(); ip_node != it->end(); ip_node++)
 			{
@@ -122,6 +133,7 @@ int RuleManager::_load_config_file(const string &config_file, RULECONTENTTYPE &c
 				RULECONTENT rule_content;
 				memcpy(rule_content.url, url.data(), url.length());
 				memcpy(rule_content.remote_addr.ip, ip.data(), ip.length());
+				rule_content.delay_time_ms = delay_time;
 				rule_content.remote_addr.port = port;
 				cur_rules_content.insert(std::make_pair(stream_id_str, rule_content));
 			}
@@ -152,6 +164,7 @@ int RuleManager::_get_add_task(TASKCONTENTLIST &add_task_list, RULECONTENTTYPE &
 				memcpy(task.url, item.second.url, sizeof(item.second.url));
 				memcpy(task.remote_addr_list[0].ip, item.second.remote_addr.ip, sizeof(item.second.remote_addr.ip));
 				task.remote_addr_list[0].port = item.second.remote_addr.port;
+				task.delay_time_ms = item.second.delay_time_ms;
 				//task_content_index.insert(std::make_pair(item.second.url, 1));
 				task.addr_cout++;
 				task_map.insert(std::make_pair(item.second.url, task));
@@ -323,10 +336,10 @@ void RuleManager::_start_task(const int interveral/*=5*/)
 	}
 	//task_.reset(new thread(std::bind(&RuleManager::_do_task, this)));
 	task_.reset(new thread(std::bind(&RuleManager::_do_task_ext, this)));
-	if (task_)
-	{
-		task_->detach();
-	}
+	//if (task_)
+	//{
+	//	task_->detach();
+	//}
 }
 
 void RuleManager::_stop_task()

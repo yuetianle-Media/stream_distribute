@@ -207,6 +207,8 @@ int M3u8Parser::_parse_ts_chunk(const std::string &content)
 //
 //int M3u8Parser::_parse_byterange(const std::string &content)
 //{
+//	RegexTextFinder finder;
+//	std::string byte_range_pattern = M3U8_EXT_X_BYTERANGE + ":" + "(\\d+)";
 //	return 0;
 //}
 

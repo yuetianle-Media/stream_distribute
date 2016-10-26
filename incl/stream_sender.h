@@ -62,6 +62,9 @@ public:
 
 	bool add_sender_address(const string &remote_addr, const int &port);
 	bool del_sender_address(const string &remote_addr, const int &port);
+
+	void set_delay_time(const int &delay_time_ms);
+	void set_receive_url(const string &url);
 	void stream_receive_callback(char *data, const long int &data_len, const bool &is_finished);
 private:
 
@@ -77,7 +80,7 @@ private:
 	void _do_send_ts_data(UDPClientPtr udp_client, char* data, const long int &data_len, const int &time);
 
 	UDPClientPtr udp_sender_ptr;
-	StreamBuffer stream_buffer_;
+	//StreamBuffer stream_buffer_;
 	CTsPacket ts_packet_;
 	long ts_index_;
 	char send_buffer_[188 * 7 * 200];//<* 发送的缓存区 至少存在两个PCRTS包>
@@ -94,6 +97,8 @@ private:
 	double tranlate_rate_;
 	double tranlate_interval_time_;
 	std::map<string, UDPClientPtr> sender_clients_list_;/*<< (ip:port):udpclient example "224.0.1.20:8000"*/
+
+	std::mutex multicast_mtx_;
 	std::map<std::string, IPPORTPAIR> multicast_list_;
 	std::shared_ptr<std::thread> send_task_thrd_;
 	std::shared_ptr<std::thread> parse_ts_thrd_;
@@ -108,6 +113,10 @@ private:
 	std::mutex ts_send_mtx_;
     std::string out_file_name_;
 	FILE * out_ts_file_;
+	std::atomic<int> send_delay_time_;
+	std::once_flag delay_flag_;
+
+	std::string receive_url_;
 };
 
 typedef std::shared_ptr<StreamSender> StreamSenderPtr;

@@ -192,6 +192,7 @@
     <ClInclude Include="incl\test_stream_manager.h" />
     <ClInclude Include="incl\test_stream_receiver.h" />
     <ClInclude Include="incl\test_stream_sender.h" />
+    <ClInclude Include="incl\test_tcp_client.h" />
     <ClInclude Include="incl\test_udp_client.h" />
     <ClInclude Include="incl\tspacket.h" />
     <ClInclude Include="incl\udpclient.h" />

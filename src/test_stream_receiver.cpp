@@ -3,7 +3,8 @@
 #include <iostream>
 
 
-static FILE *open_file = fopen("ts.ts", "ab");
+std::string out_ts_file = "";
+static FILE *open_file = nullptr;
 inline void write_content_to_file(const string &out_file_name, char *data, const int &data_len)
 {
 	if (open_file)
@@ -43,10 +44,14 @@ void test_stream_receive(const std::string &url)
 	StreamReceiver stream_receiver(url);
 	HttpCurlClient::init();
 	stream_receiver.start();
+	out_ts_file.append(boost::posix_time::to_iso_string(boost::posix_time::second_clock::local_time())).append(".ts");
+	open_file = fopen(out_ts_file.data(), "ab");
 	stream_receiver.subcribe_ts_callback(boost::bind(receive_ts_data,_1,_2, _3));
-	while (1)
+	this_thread::sleep_for(std::chrono::seconds(60*3));
+	stream_receiver.stop();
+	if (open_file)
 	{
-		this_thread::sleep_for(std::chrono::seconds(5));
+		fclose(open_file);
 	}
 	HttpCurlClient::uninit();
 };

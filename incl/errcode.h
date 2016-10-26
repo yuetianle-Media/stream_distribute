@@ -25,3 +25,7 @@
 #pragma region DATA
 #define E_DATA_EMPTY -3000
 #pragma endregion DATA
+
+#pragma region BASE 
+#define E_PARAM_ERROR -4000
+#pragma endregion BASE
