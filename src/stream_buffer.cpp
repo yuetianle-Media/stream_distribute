@@ -3,7 +3,7 @@
 #include <assert.h>
 #include <string.h>
 StreamBuffer::StreamBuffer(const long int &size)
-    :current_index_(0), data_size_(0), data_(size)
+    :current_index_(0), data_size_(0), data_(size), capacity_(size)
 {
 
 }
@@ -15,9 +15,9 @@ StreamBuffer::~StreamBuffer()
 
 int StreamBuffer::pushToBuffer(const char *content, const int &size)
 {
-	if (content && 0 < size)
+	v_lock(lk, mtx_data_);
+	if (content && 0 < size && (capacity_-data_size_)>size)
 	{
-		v_lock(lk, mtx_data_);
 		memcpy(data_.data()+current_index_, content, size);
 		current_index_ += size;
 		data_size_ += size;

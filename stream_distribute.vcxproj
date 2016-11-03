@@ -164,6 +164,7 @@
     <Text Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="incl\data_types_defs.h" />
     <ClInclude Include="incl\demux.h" />
     <ClInclude Include="incl\dvb.h" />
     <ClInclude Include="incl\errcode.h" />
@@ -173,6 +174,7 @@
     <ClInclude Include="incl\m3u8define.h" />
     <ClInclude Include="incl\m3u8Parser.h" />
     <ClInclude Include="incl\pat_pmt.h" />
+    <ClInclude Include="incl\playlist.h" />
     <ClInclude Include="incl\pre_boost_basic.h" />
     <ClInclude Include="incl\pre_regex.h" />
     <ClInclude Include="incl\pre_std_basic.h" />
@@ -188,6 +190,7 @@
     <ClInclude Include="incl\stream_sender_buffer.h" />
     <ClInclude Include="incl\tcpclient.h" />
     <ClInclude Include="incl\test_http_curl_client.h" />
+    <ClInclude Include="incl\test_m3u8_parser.h" />
     <ClInclude Include="incl\test_rule_manager.h" />
     <ClInclude Include="incl\test_stream_manager.h" />
     <ClInclude Include="incl\test_stream_receiver.h" />

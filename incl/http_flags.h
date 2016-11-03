@@ -23,7 +23,7 @@ struct HTTPM3U8CMD
 };
 struct HTTPTSCMD
 {
-	char cmd[1024];
+	char cmd[300];
 	int cmd_length;
 	HTTPTSCMD()
 	{

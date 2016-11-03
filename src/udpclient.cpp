@@ -28,13 +28,28 @@ UDPClient::~UDPClient()
 int UDPClient::write_ext(char *data, const long int &data_len, const double &need_time, const string &remote_addr, const int &remote_port)
 {
 	auto self = shared_from_this();
+	long int use_time_micro = 0;
 	boost::asio::ip::udp::endpoint remote_ep(boost::asio::ip::address_v4::from_string(remote_addr), remote_port);
-	int result = _run_sync_action([this, self, data, data_len, need_time, remote_ep]\
+	int result = _run_sync_action([this, self, data, data_len, need_time, remote_ep, &use_time_micro]\
 		(const coro_promise_ptr &porm , const coro_timer_ptr &ptimer , boost::asio::yield_context yield)
 	{
 		try
 		{
 			boost::system::error_code ec;
+			//udp_socket_.set_option(boost::asio::ip::udp::(true), ec);
+			//if (ec)
+			//{
+			//	udp_socket_.get_option()
+			//	cout << "Set Socket No Delay To fail"<< endl;
+			//}
+			boost::asio::ip::tcp::socket::send_buffer_size sbz(0);
+			udp_socket_.get_option(sbz, ec);
+			//udp_socket_.set_option(boost::asio::ip::udp::socket::send_buffer_size(0x8000), ec);
+			//if (!ec)
+			//{
+			//	udp_socket_.get_option(sbz, ec);
+			//	//cout << "resize TCP Send Buffer OK. Buffer Size = " << sbz.value() << endl;
+			//}
 			udp_socket_.async_send_to(boost::asio::buffer(data, data_len), remote_ep, yield[ec]);
 			//udp_socket_.async_send(boost::asio::buffer(data, data_len), yield[ec]);
 			if (!ec)
@@ -47,6 +62,16 @@ int UDPClient::write_ext(char *data, const long int &data_len, const double &nee
 			}
 			if (nullptr != ptimer)
 			{
+				long long remain_count = ptimer->expires_from_now().count();
+				//std::cout << "remain count:" << remain_count << std::endl;
+				if (0 < remain_count)
+				{
+					use_time_micro = (time_out_ms_*1000 ) - remain_count;
+				}
+				else
+				{
+					use_time_micro = -1;
+				}
 				ptimer->cancel();
 			}
 		}
@@ -65,7 +90,14 @@ int UDPClient::write_ext(char *data, const long int &data_len, const double &nee
 	}
 	else
 	{
-		this_thread::sleep_for(std::chrono::microseconds((long)need_time));
+		//if (0 < need_time)
+		//{
+		//	this_thread::sleep_for(std::chrono::microseconds((long)need_time));
+		//}
+		if (0 < need_time && use_time_micro <= need_time && 0 <= use_time_micro)
+		{
+			this_thread::sleep_for(std::chrono::microseconds((long)(need_time-use_time_micro)));
+		}
 	}
 	return E_OK;
 }

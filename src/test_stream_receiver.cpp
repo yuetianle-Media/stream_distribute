@@ -46,8 +46,32 @@ void test_stream_receive(const std::string &url)
 	stream_receiver.start();
 	out_ts_file.append(boost::posix_time::to_iso_string(boost::posix_time::second_clock::local_time())).append(".ts");
 	open_file = fopen(out_ts_file.data(), "ab");
-	stream_receiver.subcribe_ts_callback(boost::bind(receive_ts_data,_1,_2, _3));
+	TSSendQueueType *ts_send_queue = nullptr;
+	bool is_finished = false;
+	auto consume_task(new thread([&]()
+	{
+		while (1)
+		{
+			if (is_finished)
+			{
+				break;
+			}
+			if (stream_receiver.get_send_queue(ts_send_queue) && ts_send_queue)
+			{
+				ts_send_queue->consume_all([](TSSENDCONTENT item) 
+				{
+					if (0 < item.real_size)
+					{
+						write_content_to_file("ts.ts", item.content, item.real_size);
+					}
+				});
+			}
+		}
+	}));
+	//stream_receiver.subcribe_ts_callback(boost::bind(receive_ts_data,_1,_2, _3));
 	this_thread::sleep_for(std::chrono::seconds(60*3));
+	is_finished = true;
+	consume_task->join();
 	stream_receiver.stop();
 	if (open_file)
 	{

@@ -182,7 +182,7 @@ void test_udp_client(const string &addr, const int &port)
 {
 	UDPClientPtr client = make_shared<UDPClient>(0,5000,"224.1.1.1", 65002);
 
-	shared_ptr<std::thread> read_thread_ptr = nullptr;
+	std::shared_ptr<std::thread> read_thread_ptr = nullptr;
 	read_thread_ptr.reset(new std::thread(std::bind(read_ts_func)));
 	read_thread_ptr->detach();
 	//client->connect();

@@ -17,10 +17,10 @@ inline void test_stream_sender(const string &url, const string &multi_server, co
 		ptr_send = std::make_shared<StreamSender>();
 		std::cout << "receive count:" << ptr.use_count() << "send count:" << ptr_send.use_count();
         ptr_send->add_sender_address(multi_server, port);
-        boost::signals2::connection sender_connect = ptr->subcribe_ts_callback(boost::bind(&StreamSender::stream_receive_callback, ptr_send, _1,_2, _3));
+        //boost::signals2::connection sender_connect = ptr->subcribe_ts_callback(boost::bind(&StreamSender::stream_receive_callback, ptr_send, _1,_2, _3));
         ptr->start();
         ptr_send->start();
-        conn_list.insert(std::make_pair(test_count, sender_connect));
+        //conn_list.insert(std::make_pair(test_count, sender_connect));
         receive_list.insert(std::make_pair(test_count, ptr));
         sender_list.insert(std::make_pair(test_count, ptr_send));
 		this_thread::sleep_for(std::chrono::seconds(5));

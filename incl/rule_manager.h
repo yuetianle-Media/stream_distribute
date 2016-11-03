@@ -24,7 +24,7 @@ struct IPPORT
 	}
 };
 
-#define MAX_DISTRIBUTE 50
+#define MAX_DISTRIBUTE 10
 struct TASKCONTENT
 {
 	char url[256];

@@ -5,8 +5,8 @@ RuleManager::RuleManager(const string &config_file)
     :config_file_name_(config_file)
 	, task_(nullptr)
 	, b_exit_(false)
-	, task_list_(12800)
-	, del_task_list_(12800)
+	, task_list_(1024)
+	, del_task_list_(1024)
 	, task_interval_(5)
 {
 	_start_task(task_interval_);

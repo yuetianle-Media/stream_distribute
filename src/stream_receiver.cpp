@@ -4,12 +4,20 @@
 
 
 StreamReceiver::StreamReceiver(const string &url)
-	:ts_task_list_(10000), uri_parser_(url), play_stream_duration_(5)\
-	, m3u8_thrd_ptr_(nullptr), ts_thrd_ptr_(nullptr), b_exit(false)\
-	, ts_file_index_(0), callback_times_(0)\
-	, uri_(url)
+	:ts_task_list_(1000), uri_parser_(url), play_stream_duration_(5)\
+	, m3u8_thrd_ptr_(nullptr), ts_thrd_ptr_(nullptr), parse_ts_thrd_(nullptr)\
+	, b_exit_m3u8_task_(false), b_exit_ts_task_(false), b_exit_parse_task_(false)\
+	, ts_file_index_(0), uri_(url), receive_ts_buffer_(TS_PACKET_LENGTH_STANDARD*7*1000)\
+	, ts_packet_queue_(32780), ts_send_content_queue_(28000), play_stream_count_(0)
 {
 	play_stream_ = uri_;
+	ostringstream ss_out;
+	if (uri_parser_.is_ready())
+	{
+		ss_out << uri_parser_.host() << "-" << uri_parser_.port() << "-";
+		ss_out << boost::posix_time::to_iso_string(boost::posix_time::second_clock::local_time()) << ".xml";
+		ts_task_file_name_ = ss_out.str();
+	}
 	if (!uri_.empty())
 	{
 		m3u8_http_client_ptr_ = std::make_shared<HttpCurlClient>();
@@ -19,8 +27,24 @@ StreamReceiver::StreamReceiver(const string &url)
 
 StreamReceiver::~StreamReceiver()
 {
-	b_exit = true;
+	b_exit_m3u8_task_ = true;
+	b_exit_ts_task_ = true;
+	b_exit_parse_task_ = true;
 	std::cout << "come desctruct Stream receiver" << std::endl;
+	if (!ts_packet_queue_.empty())
+	{
+		ts_packet_queue_.consume_all([](TS_PACKET_CONTENT item) 
+		{
+			;
+		});
+	}
+	if (!ts_send_content_queue_.empty())
+	{
+		ts_send_content_queue_.consume_all([](TSSENDCONTENT item) 
+		{
+			;
+		});
+	}
 }
 
 int StreamReceiver::start()
@@ -34,15 +58,16 @@ int StreamReceiver::start()
 
 	if (nullptr != m3u8_http_client_ptr_)
 	{
-		m3u8_http_client_ptr_->subscribe_data(boost::bind(&StreamReceiver::m3u8Callback, this, _1, _2, _3));
+		m3u8_conn_ = m3u8_http_client_ptr_->subscribe_data(boost::bind(&StreamReceiver::m3u8Callback, this, _1, _2, _3));
 	}
 	if (nullptr != ts_http_client_ptr_)
 	{
-		ts_http_client_ptr_->subscribe_data(boost::bind(&StreamReceiver::tsCallback, this, _1, _2, _3));
+		ts_conn_ = ts_http_client_ptr_->subscribe_data(boost::bind(&StreamReceiver::tsCallback, this, _1, _2, _3));
 	}
 	m3u8_thrd_ptr_.reset(new std::thread(std::bind(&StreamReceiver::_do_m3u8_task, this)));
 	ts_thrd_ptr_.reset(new std::thread(std::bind(&StreamReceiver::_do_ts_task, this)));
-	if (m3u8_thrd_ptr_ && ts_thrd_ptr_)
+	parse_ts_thrd_.reset(new thread(std::bind(&StreamReceiver::_do_parse_ts_data, this)));
+	if (m3u8_thrd_ptr_ && ts_thrd_ptr_ && parse_ts_thrd_)
 	{
 		vvlog_i("start receive stream success url:" << uri_);
 		return E_OK;
@@ -56,6 +81,24 @@ int StreamReceiver::start()
 
 void StreamReceiver::stop()
 {
+	b_exit_m3u8_task_ = true;
+	if (m3u8_thrd_ptr_ && m3u8_thrd_ptr_->joinable())
+	{
+		m3u8_thrd_ptr_->join();
+	}
+	m3u8_thrd_ptr_ = nullptr;
+	b_exit_ts_task_ = true;
+	if (ts_thrd_ptr_ && ts_thrd_ptr_->joinable())
+	{
+		ts_thrd_ptr_->join();
+	}
+	ts_thrd_ptr_ = nullptr;
+	b_exit_parse_task_ = true;
+	if (parse_ts_thrd_ && parse_ts_thrd_->joinable())
+	{
+		parse_ts_thrd_->join();
+	} 
+	parse_ts_thrd_ = nullptr;
 	if (m3u8_http_client_ptr_)
 	{
 		m3u8_http_client_ptr_->unsubscribe_data();
@@ -64,17 +107,6 @@ void StreamReceiver::stop()
 	{
 		ts_http_client_ptr_->unsubscribe_data();
 	}
-	b_exit = true;
-	if (m3u8_thrd_ptr_ && m3u8_thrd_ptr_->joinable())
-	{
-		m3u8_thrd_ptr_->join();
-	}
-	m3u8_thrd_ptr_ = nullptr;
-	if (ts_thrd_ptr_ && ts_thrd_ptr_->joinable())
-	{
-		ts_thrd_ptr_->join();
-	}
-	ts_thrd_ptr_ = nullptr;
 	vvlog_i("stop receive stream url:" << uri_);
 }
 
@@ -82,71 +114,6 @@ void StreamReceiver::stop()
 boost::signals2::connection StreamReceiver::subcribe_ts_callback(const TsSignal::slot_type &slot)
 {
 	return ts_send_signal_.connect(slot);
-}
-
-bool StreamReceiver::_find_http_header_start(char* &dest, char*src, const int src_length)
-{
-	char *tmp_src = src;
-	int tmp_length = src_length;
-	while (tmp_src && 4 <= tmp_length)
-	{
-		if ('H' == *tmp_src && 'T' == *(tmp_src + 1) && 'T' == *(tmp_src + 2) && 'P' == *(tmp_src + 3))//"HTTP"
-		{
-			dest = tmp_src;
-			return true;
-		}
-		//if ('h' == *tmp_src && 't' == *(tmp_src + 1) && 't'== *(tmp_src + 2) && 'p' == *(tmp_src + 3))//"http"
-		//{
-		//	dest = tmp_src;
-		//	return true;
-		//}
-		tmp_src++;
-		tmp_length--;
-	}
-	return false;
-}
-
-bool StreamReceiver::_find_http_header_end(char* &dest, char*src, const int src_length)
-{
-	char *tmp_src = src;
-	int tmp_length = src_length;
-	while (tmp_src && 4 <= tmp_length)
-	{
-		if ('\r'== *tmp_src && '\n'== *(tmp_src + 1) && '\r'== *(tmp_src + 2) && '\n' == *(tmp_src + 3))
-		{
-			dest = tmp_src+3;
-			return true;
-		}
-		tmp_src++;
-		tmp_length--;
-	}
-	return false;
-}
-
-bool StreamReceiver::_find_http_contentlen(long *content_len, char *src, const long src_length)
-{
-	while (src && 0 < src_length)
-	{
-		
-	}
-	return true;
-}
-
-bool StreamReceiver::_find_http_line_end(char* &dest, char*src, const int src_length)
-{
-	char *tmp_src = src;
-	int tmp_length = src_length;
-	while (tmp_src && 2 <= tmp_length)
-	{
-		if ('\r'== *tmp_src && '\n'== *(tmp_src + 1))
-		{
-			dest = tmp_src+2;
-			return true;
-		}
-		tmp_src++;
-		tmp_length--;
-	}
-	return false;
 }
 
 std::string StreamReceiver::_make_m3u8_cmd(const string &stream_url/*=0*/)
@@ -253,7 +220,7 @@ int StreamReceiver::_send_ts_cmd(const string &ts_cmd)
 	int result = E_OK;
     if (nullptr != ts_http_client_ptr_)
     {
-		vvlog_i("send ts cmd:" << ts_cmd);
+		vvlog_i("send ts cmd:" << ts_cmd << "start.");
 		result = ts_http_client_ptr_->get(ts_cmd);
 		if (E_OK != result)
 		{
@@ -290,10 +257,10 @@ bool StreamReceiver::_parser_m3u8_file(const char *m3u8_data, const int &length,
 {
 	string data;
 	data.append(m3u8_data, length);
-	M3u8Parser parser(data);
+	M3u8Parser parser(play_stream_, data);
 	std::vector<std::string> file_list;
 	parser.get_ts_file_list(file_list);
-	m3u8_data_struct.max_duration = parser.get_max_duration();
+	m3u8_data_struct.target_duration = parser.get_max_duration();
 	int index = 0;
 	for (auto &item : file_list)
 	{
@@ -303,133 +270,88 @@ bool StreamReceiver::_parser_m3u8_file(const char *m3u8_data, const int &length,
 	return true;
 }
 
-int StreamReceiver::_push_ts_cmd(const string &ts_cmd_str)
+int StreamReceiver::_push_ts_cmd_to_queue(const string &ts_cmd_str)
 {
 	HTTPTSCMD ts_cmd;
 	memcpy(ts_cmd.cmd, ts_cmd_str.c_str(), ts_cmd_str.length());
 	ts_cmd.cmd_length = ts_cmd_str.length();
-	std::map<string, int>::iterator iter = ts_all_task_map_.find(ts_cmd_str);
+	std::map<string, string>::iterator iter = ts_all_task_map_.find(ts_cmd_str);
 	if (iter == ts_all_task_map_.end())//此任务没有添加过
 	{
 		vvlog_i("push ts task cout:" << ts_all_task_map_.size() << "task:" << ts_cmd_str);
 		//cout << "push ts task cout:" << ts_all_task_map_.size() << "task:" << ts_cmd_str << std::endl;
-		_write_ts_file_list("task.xml", ts_cmd_str, 0);
-		ts_all_task_map_.insert(std::make_pair(ts_cmd_str, ts_file_index_++));
+		if (!ts_task_file_name_.empty())
+		{
+			_write_ts_file_list(ts_task_file_name_, ts_cmd_str, 0);
+		}
+		boost::posix_time::ptime now = boost::posix_time::second_clock::local_time();
+		std::string cur_time = boost::posix_time::to_iso_string(now);
+		ts_all_task_map_.insert(std::make_pair(ts_cmd_str, cur_time));
 		ts_task_list_.push(ts_cmd);
 	}
 	return 0;
 }
 
-bool StreamReceiver::_get_ts_cmd(HTTPTSCMD &cmd)
-{
-	return true;
-}
-
 void StreamReceiver::m3u8Callback(char *data, const long int &data_len, const bool &is_finished)
 {
 #pragma region new
-	if (100 < ts_all_task_map_.size())//当数据过多时删除一些旧数据
-	{
-	}
 	m3u8_content_.append(data, data_len);
 	if (is_finished)
 	{
 		m3u8_content_.append(data, data_len);
-		M3U8Data m3u8_data_struct;
-		_parser_m3u8_file(m3u8_content_.c_str(), m3u8_content_.length(), m3u8_data_struct);
-		if (0 < m3u8_data_struct.max_duration)
+		M3u8Parser parser(play_stream_, m3u8_content_);
+		if (parser.is_variant_play_list())//多个视频流
 		{
-			play_stream_duration_ = (int)m3u8_data_struct.max_duration;
+			PlayListList* play_lists = nullptr;
+			if (parser.get_play_list(play_lists) && play_lists)
+			{
+				//int play_stream_index = 0;
+				for (auto play_list : *play_lists)
+				{
+					bool is_same = false;
+					for (auto item : play_stream_list_)
+					{
+						if (item.second.compare(play_list.uri) == 0)//播放列表中已经存在
+						{
+							is_same = true;
+							break;
+						}
+					}
+					if (!is_same)
+					{
+						play_stream_list_.insert(std::make_pair(play_stream_count_, play_list.uri));
+						play_stream_count_++;
+					}
+				}
+			}
 		}
-		for (auto &item : m3u8_data_struct.ts_file_list)
+		else
 		{
-			string ts_cmd_str = _make_down_ts_cmd(item);
-			_push_ts_cmd(ts_cmd_str);
+			play_stream_duration_ = (int)parser.get_max_duration();
+			M3U8SegmentList *segment_list = nullptr;
+			if (parser.get_segments(segment_list) && segment_list)
+			{
+				for (auto segment : *segment_list)
+				{
+					_push_ts_cmd_to_queue(segment.uri);
+					//将当前2分钟之前的task从map中删除掉
+					_remove_ts_cmd(M3U8TASKREMOVEINTERVAL);
+				}
+			}
 		}
+		//M3U8Data m3u8_data_struct;
+		//_parser_m3u8_file(m3u8_content_.c_str(), m3u8_content_.length(), m3u8_data_struct);
+		//if (0 < m3u8_data_struct.target_duration)
+		//{
+		//	play_stream_duration_ = (int)m3u8_data_struct.target_duration;
+		//}
+		//for (auto &item : m3u8_data_struct.ts_file_list)
+		//{
+		//	string ts_cmd_str = _make_down_ts_cmd(item);
+		//	_push_ts_cmd_to_queue(ts_cmd_str);
+		//}
 		m3u8_content_.clear();
 	}
-#pragma endregion new
-	//http_packet.append(data, data_len);
-	//char *end_char = strstr((char*)http_packet.c_str(), (char*)HTTP_HEAD_END.c_str());
-	//if (nullptr != end_char)
-	//{
-	//	RegexTextFinder regex_finder;
-	//	int index = http_packet.find_first_of("\r\n");
-	//	int http_code = 200;
-	//	if (index != string::npos)
-	//	{
-	//		string first_header_content = http_packet.substr(0, index);
-	//		if (regex_finder.find(first_header_content, "(.+?) (\\d+) (.+$)"))
-	//		{
-	//			http_code = atoi(regex_finder[2].c_str());
-	//		}
-	//	}
-	//	if (http_code != 200)
-	//	{
-	//		//vvlog_w("m3u8 callback error:" << http_code);
-	//		http_packet.clear();
-	//		return;
-	//	}
-	//	int http_head_length = end_char + 4 - http_packet.data();
-	//	if (http_head_length == data_len)//只有HTTP头
-	//		return;
-	//	if (regex_finder.find(http_packet, "Content-Length: (\\d+)"))
-	//	{
-	//		int content_length = atoi(regex_finder[1].c_str());//http头后的数据长度
-	//		int one_packet_length = content_length + http_head_length;
-	//		if (one_packet_length <= http_packet.length())
-	//		{
-	//			string m3u8_content = http_packet.substr(http_head_length, content_length);
-	//			M3U8Data m3u8_data_struct;
-	//			_parser_m3u8_file(m3u8_content.c_str(), m3u8_content.length(), m3u8_data_struct);
-	//			if (0 < m3u8_data_struct.max_duration)
-	//			{
-	//				play_stream_duration_ = (int)m3u8_data_struct.max_duration;
-	//			}
-	//			//char out_file_name[1024] = {0};
-	//			//sprintf(out_file_name, "m3u8callbackfile_%d.xml", callback_times_);
-	//			int file_index = 0;
-	//			for (auto &item : m3u8_data_struct.ts_file_list)
-	//			{
-	//				//cout << "file:" << item.first << "index:" << item.second << endl;
-	//				string ts_cmd_str = _make_down_ts_cmd(item);
-	//				_push_ts_cmd(ts_cmd_str);
-	//				//_write_ts_file_list(out_file_name, item, file_index);
-	//				file_index++;
-	//			}
-	//			//callback_times_++;
-	//			http_packet = http_packet.substr(one_packet_length\
-	//				, http_packet.length() - one_packet_length);//去除一整包http
-	//			return;
-	//		}
-	//	}
-	//	//int http_index = end_char + 4 - http_packet.c_str();
-	//	//if (regex_finder.find(http_packet, "Content-Length: (\\d+)"))
-	//	//{
-	//	//	int content_length = atoi(regex_finder[1].c_str());//http头后的数据长度
-	//	//	int one_packet_length = http_index + content_length;//一包http数据的长度
-	//	//	int all_data_length = http_packet.length();//接收到数据的总长度
-	//	//	if (one_packet_length <= all_data_length)
-	//	//	{
-	//	//		string m3u8_content = http_packet.substr(http_index, content_length);
-	//	//		M3U8Data m3u8_data_struct;
-	//	//		_parser_m3u8_file(m3u8_content.c_str(), m3u8_content.length(), m3u8_data_struct);
-	//	//		char out_file_name[1024] = {0};
-	//	//		sprintf(out_file_name, "m3u8callbackfile_%d.xml", callback_times_);
-	//	//		for (auto &item : m3u8_data_struct.ts_file_list)
-	//	//		{
-	//	//			//cout << "file:" << item.first << "index:" << item.second << endl;
-	//	//			string ts_cmd_str = _make_down_ts_cmd(item.first);
-	//	//			_push_ts_cmd(ts_cmd_str);
-	//	//			_write_ts_file_list(out_file_name, item.first, item.second);
-	//	//		}
-	//	//		callback_times_++;
-	//	//		http_packet = http_packet.substr(one_packet_length\
-	//	//			, all_data_length - one_packet_length);//去除一整包http
-	//	//	}
-	//	//}
-	//}
-	//return;//没有找到一整包数据
 #pragma region test
 	//fstream out_file;
 	//char file_name[100] = {0};
@@ -443,599 +365,50 @@ void StreamReceiver::m3u8Callback(char *data, const long int &data_len, const bo
 
 void StreamReceiver::tsCallback(char *data, const long int &data_len, const bool &is_finished)
 {
+	if (data && 0 < data_len)
+	{
+		int push_result = receive_ts_buffer_.pushToBuffer(data, data_len);
+		if (E_OK != push_result)
+		{
+			assert(false);
+		}
+		while (TS_PACKET_LENGTH_STANDARD <= receive_ts_buffer_.data_len())
+		{
+			TS_PACKET_CONTENT one_ts_data;
+			if (receive_ts_buffer_.pop_data(one_ts_data.content, TS_PACKET_LENGTH_STANDARD, TS_PACKET_LENGTH_STANDARD))
+			{
+				if (0 < one_ts_data.real_size &&(!one_ts_data.content || one_ts_data.content[0] != 0x47))
+				{
+					assert(false);
+				}
+				one_ts_data.real_size = TS_PACKET_LENGTH_STANDARD;
+				while (!ts_packet_queue_.push(one_ts_data))
+				{
+					this_thread::sleep_for(std::chrono::microseconds(1));
+					if (b_exit_ts_task_)
+					{
+						break;
+					}
+					//vvlog_e("push ts data to queue faile, url!!");
+				}
+				//bool ret = ts_packet_queue_.push(one_ts_packet);
+				//if (!ret)
+				//{
+				//	vvlog_e("push ts data to queue faile, url:" << receive_url_);
+				//	this_thread::sleep_for(std::chrono::microseconds(1));
+				//}
+			}
+			else
+			{
+				vvlog_e("pop data faile");
+			}
+		}
+	}
+
 #pragma region newhttp
-	ts_send_signal_(data, data_len, is_finished);
+	//ts_send_signal_(data, data_len, is_finished);
 	return;
 #pragma endregion newhttp
-//	if (!data && E_MESG_END == data_len)
-//	{
-//		ts_need_receive_ = true;
-//		is_ts_http_content_end_ = true;
-//		if (0 < ts_http_content_length_)//数据读取完毕而ts_http_content_length_还没读完
-//		{
-//			ts_http_content_length_ = 0;
-//			//assert(false);
-//		}
-//		return;
-//	}
-//	//v_lock(lk, ts_)
-//	//vvlog_i("ts_callback start length:" << data_len);
-//	std::cout << "ts_callback start length:" << data_len << std::endl;
-//	memset(data_cache_, 0, sizeof(data_cache_));
-//	memcpy(data_cache_, data, data_len);
-//	//memmove(data_cache_, data, data_len);
-//#pragma region Now
-//	if (is_reading_ts_http_header_)//正在读取http头
-//	{
-//		char *http_header_start = nullptr;
-//		char *http_header_end = nullptr;
-//		int send_length = 0;
-//		if (_find_http_header_start(http_header_start, data_cache_, data_len))
-//		{
-//			if (_find_http_header_end(http_header_end, data_cache_, data_len))
-//			{
-//				//查找content length
-//				//char http_header[2048] = {0};
-//				int http_header_len = int(http_header_end - http_header_start) + 1;
-//				//memcpy(http_header, http_header_start, http_header_len);
-//				httpparser::Response response_1;
-//				httpparser::HttpResponseParser http_parser;
-//				//_write_content_to_file("http_header.txt", http_header_start, http_header_len);
-//				httpparser::HttpResponseParser::ParseResult result \
-//					= http_parser.parse(response_1, http_header_start, http_header_end+1);
-//				if (result == httpparser::HttpResponseParser::ParsingCompleted)
-//				{
-//					for (auto item : response_1.headers)
-//						if (item.name == "Content-Length")
-//							ts_http_content_length_ = atoi(item.value.c_str());
-//				}
-//				else
-//				{
-//					//vvlog_e("parse error data:" << data << "dataLen:" << data_len);
-//					std::cout << "parse error data:" << data << "dataLen:" << data_len << std::endl;
-//				}
-//				if (response_1.statusCode != 200)
-//				{
-//					//vvlog_e("ts http request failed errorcode:" << response_1.statusCode\
-//						<< "msg:" << response_1.status << "content:" << data_cache_ << "datalen:" << data_len);
-//					if (0 >= ts_http_content_length_)
-//					{
-//						is_ts_http_content_end_ = true;
-//					}
-//					else
-//					{
-//						is_reading_ts_http_header_ = false;
-//						//int invaild_len = data_len - (data_cache_ - http_header_end);
-//						int invaild_len = data_len - (http_header_end - data_cache_);
-//						if (0 >= invaild_len || 0 >= ts_http_content_length_ - invaild_len)
-//						{
-//							ts_http_content_length_ = 0;
-//							is_ts_http_content_end_ = true;
-//							is_reading_ts_http_header_ = true;
-//						}
-//						else
-//						{
-//							//vvlog_e("invalild http request not complete");
-//							std::cout << "invalild http request not complete" << std::endl;
-//							ts_http_content_length_ -= invaild_len;
-//						}
-//					}
-//					return;
-//				}
-//				if (0 >= ts_http_content_length_)//无TS内容
-//				{
-//					is_ts_http_content_end_ = true;
-//					return;
-//				}
-//				//vvlog_i("find http header contentlen:" << ts_http_content_length_\
-//					<< "headerLen:" << http_header_len);
-//				is_reading_ts_http_header_ = false;
-//				int ts_head_send_size = data_len - http_header_len;
-//				if (0 < ts_head_send_size)
-//				{
-//					ts_http_content_length_ -= ts_head_send_size;
-//					ts_send_signal_(http_header_end+1, ts_head_send_size);
-//					std::cout << "ts_callback filename:" << one_ts_packet_\
-//						<< "alllen:" << recive_ts_all_len_\
-//						<< "send data size:" << ts_head_send_size\
-//						<< "remainlen:" << ts_http_content_length_ << std::endl;
-//					receive_ts_index_ = 0;
-//					//char out_file_name[1024] = { 0 };
-//					//sprintf(out_file_name, "%s_%d", one_ts_packet_, receive_ts_index_);
-//					//_write_content_to_file(out_file_name, data_cache_, data_len);
-//					_write_content_to_file(one_ts_packet_, http_header_end+1, ts_head_send_size);
-//					recive_ts_all_len_ += ts_head_send_size;
-//					//_write_content_to_file("ts_src.ts", http_header_end, ts_head_send_size);
-//					//_write_content_to_file(out_file_name, http_header_end, ts_head_send_size);
-//					//vvlog_i("ts_callback filename:" << one_ts_packet_\
-//						<< "alllen:" << recive_ts_all_len_\
-//						<< "send data size:" << ts_head_send_size\
-//						<< "remainlen:" << ts_http_content_length_);
-//					//sprintf(out_file_name, "send_ts_%d.ts", callback_times_);
-//					//callback_times_++;
-//					//_write_content_to_file()
-//				}
-//				if (0 >= ts_http_content_length_)
-//				{
-//					is_ts_http_content_end_ = true;
-//					is_reading_ts_http_header_ = true;
-//				}
-//			}
-//			else
-//			{
-//				//vvlog_e("find header but not find end data:" << data_cache_ << "dataLen:" << data_len);
-//			}
-//		}
-//		else//没有找到头
-//		{
-//			assert(false);
-//		}
-//	}
-//	else
-//	{
-//		if (0 >= ts_http_content_length_)
-//		{
-//			is_ts_http_content_end_ = true;
-//			is_reading_ts_http_header_ = true;
-//			ts_http_content_length_ = 0;
-//		}
-//		else
-//		{
-//			if (0 < data_len && data_len <= ts_http_content_length_)//读取ts数据
-//			{
-//				ts_http_content_length_ -= data_len;
-//				ts_send_signal_(data_cache_, data_len);
-//				//char out_file_second[1024] = { 0 };
-//				//sprintf(out_file_second, "%s_%d", one_ts_packet_, ++receive_ts_index_);
-//				//_write_content_to_file(out_file_second, data_cache_, data_len);
-//				recive_ts_all_len_ += data_len;
-//				//vvlog_i("ts_callback file:" << one_ts_packet_ << "send data size:" << data_len << "remainLen:" << ts_http_content_length_);
-//				_write_content_to_file(one_ts_packet_, data_cache_, data_len);
-//				std::cout << "ts_callback file:" << one_ts_packet_ << "send data size:" << data_len << "remainLen:" << ts_http_content_length_ << std::endl;
-//				if (0 >= ts_http_content_length_)
-//				{
-//					is_ts_http_content_end_ = true;
-//					is_reading_ts_http_header_ = true;
-//					ts_http_content_length_ = 0;
-//				}
-//			}
-//			else//ts数据后面有HTTP头部数据
-//			{
-//				assert(false);
-//			}
-//		}
-//	}
-#pragma endregion Now
-	//_write_content_to_file("ts_callbcak.dat", data, data_len);
-	//callback_times_++;
-	//char out_file_name[1024] = { 0 };
-	//sprintf(out_file_name, "send_ts_%d.ts", callback_times_);
-#pragma region new1
-	//if (is_reading_ts_http_header_)//正在读取http头
-	//{
-	//	char *http_header_start = nullptr;
-	//	char *http_header_end = nullptr;
-	//	int send_length = 0;
-	//	if (_find_http_header_start(http_header_start, data, data_len))
-	//	{
-	//		if (_find_http_header_end(http_header_end, data, data_len))
-	//		{
-	//			//查找content length
-	//			string http_header;
-	//			ts_http_cache_.append(http_header_start, http_header_end - http_header_start);
-	//			httpparser::Response response_1;
-	//			httpparser::HttpResponseParser http_parser;
-	//			_write_content_to_file("http_header.txt", http_header_start, http_header_end - http_header_start);
-	//			httpparser::HttpResponseParser::ParseResult result \
-	//				= http_parser.parse(response_1, http_header_start, http_header_end);
-	//			if (result == httpparser::HttpResponseParser::ParsingCompleted)
-	//			{
-	//				for (auto item : response_1.headers)
-	//					if (item.name == "Content-Length")
-	//						ts_http_content_length_ = atoi(item.value.c_str());
-	//			}
-	//			else
-	//			{
-	//				std::cout << "parser error!!!" << std::endl;
-	//			}
-	//			if (response_1.statusCode != 200)
-	//			{
-	//				vvlog_e("ts http request failed errorcode:" << response_1.statusCode\
-	//					<< "msg:" << response_1.status << "content:" << data << "datalen:" << data_len);
-	//				if (0 >= ts_http_content_length_)
-	//				{
-	//					is_ts_http_content_end_ = true;
-	//				}
-	//				else
-	//				{
-	//					is_reading_ts_http_header_ = false;
-	//					//int invaild_len = data_len - (data - http_header_end);
-	//					int invaild_len = data_len - (http_header_end - data);
-	//					if (0 >= invaild_len || 0 >= ts_http_content_length_ - invaild_len)
-	//					{
-	//						ts_http_content_length_ -= invaild_len;
-	//						is_ts_http_content_end_ = true;
-	//						is_reading_ts_http_header_ = true;
-	//					}
-	//					else
-	//					{
-	//						vvlog_e("invalild http request not complete");
-	//						ts_http_content_length_ -= invaild_len;
-	//					}
-	//				}
-	//				return;
-	//			}
-	//			if (0 >= ts_http_content_length_)//无TS内容
-	//			{
-	//				is_ts_http_content_end_ = true;
-	//				return;
-	//			}
-	//			vvlog_i("find http header contentlen:" << ts_http_content_length_\
-	//				<< "headerLen:" << http_header_end-http_header_start);
-	//			ts_http_cache_.clear();
-	//			//sprintf(one_ts_packet_, "ts_%d.ts", receive_ts_index_++);
-	//			is_reading_ts_http_header_ = false;
-	//			int ts_head_send_size = data_len - int(http_header_end - data);
-	//			if (0 < ts_head_send_size)
-	//			{
-	//				ts_http_content_length_ -= ts_head_send_size;
-	//				ts_send_signal_(http_header_end, ts_head_send_size);
-	//				_write_content_to_file(one_ts_packet_, http_header_end, ts_head_send_size);
-	//				recive_ts_all_len_ += ts_head_send_size;
-	//				//_write_content_to_file("ts_src.ts", http_header_end, ts_head_send_size);
-	//				//_write_content_to_file(out_file_name, http_header_end, ts_head_send_size);
-	//				vvlog_i("ts_callback filename:" << one_ts_packet_\
-	//					<< "alllen:" << recive_ts_all_len_\
-	//					<< "send data size:" << ts_head_send_size\
-	//					<< "remainlen:" << ts_http_content_length_);
-	//				//sprintf(out_file_name, "send_ts_%d.ts", callback_times_);
-	//				//callback_times_++;
-	//				//_write_content_to_file()
-	//			}
-	//			if (0 >= ts_http_content_length_)
-	//			{
-	//				is_ts_http_content_end_ = true;
-	//				is_reading_ts_http_header_ = true;
-	//			}
-	//		}
-	//		else
-	//		{
-	//			vvlog_e("find header but not find end data:" << data << "dataLen:" << data_len);
-	//		}
-	//	}
-	//	else//没有找到头
-	//	{
-	//		//if (_find_http_header_end(http_header_end, data, data_len))
-	//		//{
-
-	//		//	int append_len = http_header_end - data;
-	//		//	ts_http_cache_.append(data, append_len);
-
-	//		//	//查找content length
-	//		//	string http_header;
-	//		//	httpparser::Response response_2;
-	//		//	httpparser::HttpResponseParser http_parser;
-	//		//	char *http_header_end_1 = (char*)ts_http_cache_.data() + (ts_http_cache_.length());
-	//		//	char *http_header_start_1 = (char*)ts_http_cache_.data();
-	//		//	_write_content_to_file("http_header.txt", (char*)ts_http_cache_.data(), ts_http_cache_.length());
-	//		//	httpparser::HttpResponseParser::ParseResult result \
-	//		//		= http_parser.parse(response_2, http_header_start_1, http_header_end_1);
-	//		//	if (result == httpparser::HttpResponseParser::ParsingCompleted)
-	//		//	{
-	//		//		for (auto item : response_2.headers)
-	//		//			if (item.name == "Content-Length")
-	//		//				ts_http_content_length_ = atoi(item.value.c_str());
-	//		//	}
-	//		//	else
-	//		//	{
-	//		//		std::cout << "parser error!!!" << std::endl;
-	//		//	}
-
-	//		//	if (response_2.statusCode != 200)
-	//		//	{
-	//		//		vvlog_e("ts http request failed errorcode:" << response_2.statusCode << "msg:" << response_2.status);
-	//		//		return;
-	//		//	}
-	//		//	if (0 >= ts_http_content_length_)//无TS内容
-	//		//	{
-	//		//		return;
-	//		//	}
-	//		//	//vvlog_i("find http header contentLen:" << ts_http_content_length_\
-	//		//		<< "headerLen:" <<ts_http_cache_.length());
-	//		//	ts_http_cache_.clear();
-	//		//	is_reading_ts_http_header_ = false;
-	//		//	int ts_send_size = data_len - int(http_header_end - data);
-	//		//	ts_http_content_length_ -= ts_send_size;
-	//		//	if (0 < ts_send_size)
-	//		//	{
-	//		//		ts_send_signal_(http_header_end, ts_send_size);
-	//		//		recive_ts_all_len_ += ts_send_size;
-	//		//		//_write_content_to_file("ts_src.ts", http_header_end, ts_send_size);
-	//		//		//_write_content_to_file(out_file_name, http_header_end, ts_send_size);
-	//		//		vvlog_i("ts_callback send alllen:" << recive_ts_all_len_ << "data size:" << ts_send_size << "remainlen:" << ts_http_content_length_);
-	//		//		//sprintf(out_file_name, "send_ts_%d.ts", callback_times_);
-	//		//		callback_times_++;
-	//		//	}
-	//		//	if (0 >= ts_http_content_length_)
-	//		//	{
-	//		//		is_reading_ts_http_header_ = true;
-	//		//	}
-
-	//		//}
-	//		//else
-	//		//{
-	//		//	assert(false);
-	//		//}
-
-	//	}
-	//}
-	//else
-	//{
-	//	if (0 >= ts_http_content_length_)
-	//	{
-	//		is_ts_http_content_end_ = true;
-	//		is_reading_ts_http_header_ = true;
-	//		ts_http_content_length_ = 0;
-	//	}
-	//	else
-	//	{
-	//		if (0 < data_len && data_len <= ts_http_content_length_)//读取ts数据
-	//		{
-	//			ts_http_content_length_ -= data_len;
-	//			ts_send_signal_(data, data_len);
-	//			recive_ts_all_len_ += data_len;
-	//			vvlog_i("ts_callback file:" << one_ts_packet_ << "send data size:" << data_len << "remainLen:" << ts_http_content_length_);
-	//			_write_content_to_file(one_ts_packet_, data, data_len);
-	//			//_write_content_to_file("ts_src.ts", data, data_len);
-	//			//_write_content_to_file(out_file_name, data, data_len);
-	//				//sprintf(out_file_name, "send_ts_%d.ts", callback_times_);
-	//				//callback_times_++;
-	//			//vvlog_i("ts_callback send data size:" << data_len << "remainlen:" << ts_http_content_length_);
-	//			if (0 >= ts_http_content_length_)
-	//			{
-	//				is_ts_http_content_end_ = true;
-	//				is_reading_ts_http_header_ = true;
-	//				ts_http_content_length_ = 0;
-	//			}
-	//		}
-	//		else//ts数据后面有HTTP头部数据
-	//		{
-	//			//if (0 < ts_http_content_length_)
-	//			//{
-	//			//	ts_send_signal_(data, ts_http_content_length_);
-	//			//	//_write_content_to_file("ts_src.ts", data, ts_http_content_length_);
-	//			//	//_write_content_to_file(out_file_name, data, ts_http_content_length_);
-	//			//	vvlog_i("ts_callback" << "send data size:" << ts_http_content_length_ << "remainlen:" << 0);
-	//			//	//sprintf(out_file_name, "send_ts_%d.ts", callback_times_);
-	//			//	//callback_times_++;
-	//			//}
-	//			//char *end_char = data + ts_http_content_length_;
-	//			//long int end_length = data_len - ts_http_content_length_;
-	//			//char *http_start_1 = nullptr;
-	//			//char *http_end_1 = nullptr;
-	//			//if (_find_http_header_start(http_start_1, end_char, end_length))
-	//			//{
-	//			//	ts_http_content_length_ = 0;
-	//			//	if (_find_http_header_end(http_end_1, end_char, end_length))
-	//			//	{
-
-	//			//		string http_header;
-	//			//		httpparser::Response response_3;
-	//			//		httpparser::HttpResponseParser http_parser;
-	//			//		_write_content_to_file("http_header.txt", http_start_1, http_end_1 - http_start_1);
-	//			//		httpparser::HttpResponseParser::ParseResult result \
-	//			//			= http_parser.parse(response_3, http_start_1, http_end_1);
-	//			//		if (result == httpparser::HttpResponseParser::ParsingCompleted)
-	//			//		{
-	//			//			for (auto item : response_3.headers)
-	//			//				if (item.name == "Content-Length")
-	//			//					ts_http_content_length_ = atoi(item.value.c_str());
-	//			//		}
-	//			//		else
-	//			//		{
-	//			//			std::cout << "parser error!!!" << std::endl;
-	//			//		}
-
-	//			//		if (response_3.statusCode != 200)
-	//			//		{
-	//			//			vvlog_e("ts http request failed errorcode:" << response_3.statusCode << "msg:" << response_3.status);
-	//			//			return;
-	//			//		}
-	//			//		if (0 >= ts_http_content_length_)//无TS内容
-	//			//		{
-	//			//			return;
-	//			//		}
-	//			//		//vvlog_i("find http header contentLen:" << ts_http_content_length_\
-	//			//		<< "headerLen:" << (http_end_1-http_start_1));
-	//			//		int send_size = data_len - int(http_end_1 - data);
-	//			//		if (0 < send_size)
-	//			//		{
-	//			//			ts_send_signal_(http_end_1, send_size);
-	//			//			//_write_content_to_file("ts_src.ts", http_end_1, send_size);
-	//			//			//_write_content_to_file(out_file_name, http_end_1, send_size);
-	//			//			vvlog_i("ts_callback send data size:" << send_size << "remainlen:" << 0);
-	//			//			//sprintf(out_file_name, "send_ts_%d.ts", callback_times_);
-	//			//			//callback_times_++;
-	//			//		}
-	//			//		ts_http_content_length_ -= send_size;
-	//			//		if (0 >= ts_http_content_length_)
-	//			//		{
-	//			//			is_reading_ts_http_header_ = true;
-	//			//		}
-	//			//	}
-	//			//	else
-	//			//	{
-	//			//		ts_http_cache_.append(http_start_1, data_len - (http_start_1-data));
-	//			//		is_reading_ts_http_header_ = true;
-	//			//	}
-	//			//}
-	//			//else
-	//			//{
-	//			//	std::cout << "not complete header" << std::endl;
-	//			//}
-	//		}
-	//	}
-	//}
-	//return;
-#pragma endregion new1
-
-
-#pragma region new
-#pragma region test
-//	callback_times_++;
-//	//char out_file_name[1024] = { 0 };
-//	//sprintf(out_file_name, "send_ts_%d.ts", callback_times_);
-//	//_write_content_to_file(out_file_name, data, data_len);
-//	_write_content_to_file("ts_callbcak.dat", data, data_len);
-//#pragma endregion test
-//	char *http_header_start = nullptr;
-//	char *http_header_end = nullptr;
-//	int send_length = 0;
-//	vvlog_i("ts_callback start length:" << data_len);
-//	_find_http_header_start(http_header_start, data, data_len);
-//	_find_http_header_end(http_header_end, data, data_len);
-//	if (http_header_start)
-//	{
-//		int head_length = http_header_start - data;
-//		int http_code = 0;
-//		char *http_first_line = nullptr;
-//		if (_find_http_line_end(http_first_line, http_header_start, data_len))
-//		{
-//			char first_line_content[1024] = { 0 };
-//			if (http_first_line)
-//			{
-//				int first_line_length = http_first_line - http_header_start;
-//				if (0 < first_line_length)
-//					memcpy(first_line_content, http_header_start, first_line_length);
-//			}
-//			if (0 < strlen(first_line_content))
-//			{
-//				RegexTextFinder regex_finder;
-//				if (regex_finder.find(first_line_content, "(.+?) (\\d+) (.+$)"))
-//				{
-//					http_code = atoi(regex_finder[2].c_str());
-//				}
-//			}
-//			if (200 != http_code)//如果http请求失败不进行数据传输
-//			{
-//				vvlog_e("http request error!!!");
-//				return;
-//			}
-//		}
-//		else
-//		{
-//			cout << "error !!" << std::endl;
-//		}
-//		if (0 < head_length)
-//		{
-//			send_length = head_length;
-//			if (0 < send_length)
-//			{
-//				vvlog_i("ts_callback send data mid.");
-//				ts_send_signal_(data, head_length);
-//				vvlog_i("ts_callback send data len:" << send_length << "times:" << callback_times_);
-//			}
-//		}
-//		if (http_header_end)
-//		{
-//			int http_header_length = http_header_end - data;
-//			send_length = data_len - http_header_length;
-//			if (0 < send_length)
-//			{
-//				ts_send_signal_(data + http_header_length, send_length);
-//				vvlog_i("ts_callback send data len:" << send_length<< "times:" << callback_times_);
-//			}
-//		}
-//		else
-//		{
-//			vvlog_w("only find header start not header end!!!");
-//		}
-//	}
-//	else
-//	{
-//		vvlog_i("ts_callback come here 3 !!");
-//		if (http_header_end)
-//		{
-//			int http_end_length = http_header_end - data;
-//			send_length = data_len - http_end_length;
-//			if (0 < send_length)
-//			{
-//				ts_send_signal_(data + http_end_length, send_length);
-//				vvlog_i("ts_callback send data len:" << send_length<< "times:" << callback_times_);
-//			}
-//		}
-//		else
-//		{
-//			send_length = data_len;
-//			//vvlog_i("ts_callback come here 4 !!");
-//			if (0 < send_length)
-//			{
-//				ts_send_signal_(data, data_len);
-//				vvlog_i("ts_callback send data len:" << send_length<< "times:" << callback_times_);
-//			}
-//		}
-//	}
-//	vvlog_i("ts_callback end");
-//	return;
-//#pragma endregion new
-//
-//
-//	vvlog_i("ts callback start datalen:" << data_len);
-//	//char http_out_file_name[1024] = { 0 };
-//	//sprintf(http_out_file_name, "http_out_file_%d.txt", save_content_index_);
-//	//_write_content_to_file(http_out_file_name, data, data_len);
-//	if (data && 0 < data_len)
-//	{
-//		callback_times_++;
-//		//char out_file_name[1024] = { 0 };
-//		//sprintf(out_file_name, "send_ts_%d.ts", callback_times_);
-//		char *end_char = strstr(data, (char*)HTTP_HEAD_END.c_str());
-//		if (nullptr != end_char)
-//		{
-//			http_ts_packet_.append(data, data_len);
-//			RegexTextFinder regex_finder;
-//			int index = http_ts_packet_.find_first_of("\r\n");
-//			int http_code = 200;
-//			if (index != string::npos)
-//			{
-//				string first_header_content = http_ts_packet_.substr(0, index);
-//				if (regex_finder.find(first_header_content, "(.+?) (\\d+) (.+$)"))
-//				{
-//					http_code = atoi(regex_finder[2].c_str());
-//				}
-//			}
-//			if (http_code != 200)
-//			{
-//				//cout << "ts call callback error len:" << data_len << "data:" << data << std::endl;
-//				vvlog_w("ts call callback error len:" << data_len << "data:" << data);
-//				http_ts_packet_.clear();
-//				return;
-//			}
-//			int http_content_length = end_char - data + 4;
-//			int ts_send_size = data_len - http_content_length;
-//			if (0 < ts_send_size)
-//			{
-//				//cout << "send ts data size:" << ts_send_size << std::endl;
-//				vvlog_i("send ts data size:" << ts_send_size);
-//				//_write_content_to_file(out_file_name, end_char + 4, ts_send_size);
-//				ts_send_signal_(end_char+4, ts_send_size);
-//			}
-//			else
-//			{
-//				vvlog_i("end_index ts_send_size:" << ts_send_size);
-//				//cout << "end_index ts_send_size:" << ts_send_size << std::endl;
-//			}
-//			http_ts_packet_.clear();
-//		}
-//		else//不是http头
-//		{
-//			vvlog_i("send ts data size:" << data_len);
-//			//cout << "send ts data size:" << data_len << std::endl;
-//			//_write_content_to_file(out_file_name, data, data_len);
-//			ts_send_signal_(data, data_len);
-//		}
-//	}
-//	vvlog_i("ts callback end datalen:" << data_len);
 }
 
 int StreamReceiver::_do_m3u8_task()
@@ -1045,12 +418,81 @@ int StreamReceiver::_do_m3u8_task()
 		{
             int result = _send_m3u8_cmd(play_stream_);
 			std::this_thread::sleep_for(std::chrono::seconds(play_stream_duration_));
+			if (!m3u8_conn_.connected())
+			{
+				m3u8_conn_ = m3u8_http_client_ptr_->subscribe_data(boost::bind(&StreamReceiver::m3u8Callback, this, _1, _2, _3));
+			}
+			if (0 < play_stream_count_)
+			{
+				play_stream_ = play_stream_list_.at(0);
+			}
 		}
-        if (b_exit)
+        if (b_exit_m3u8_task_)
         {
             break;
         }
     }
+	return 0;
+}
+
+int StreamReceiver::_do_m3u8_task_group(const string & play_stream, const long int play_duration)
+{
+	auto self = shared_from_this();
+	if (0 < play_stream_list_.size())
+	{
+		for (auto play_stream : play_stream_list_)
+		{
+			auto task_thread = std::make_shared<std::thread>(std::bind([&]() 
+			{
+				int play_duration = 0;
+				std::string m3u8_content;
+				auto http_client = std::make_shared<HttpCurlClient>();
+				//TSTaskType ts_task_queue(1000);
+				std::shared_ptr<TSTaskType> ts_queue_ptr = std::make_shared<TSTaskType>(1000);
+				ts_task_group_.insert(std::make_pair(play_stream.first, ts_queue_ptr));
+				std::map<std::string, std::string> all_ts_task;
+				http_client->subscribe_data([&](char* data, const long &data_len, const bool &is_finished)->void 
+				{
+					m3u8_content.append(data, data_len);
+					if (is_finished)
+					{
+						m3u8_content.append(data, data_len);
+						M3u8Parser parser(play_stream.second, m3u8_content);
+						if (!parser.is_variant_play_list())//单个视频流
+						{
+							play_duration = parser.get_max_duration();
+							M3U8SegmentList *segment_list = nullptr;
+							if (parser.get_segments(segment_list) && segment_list)
+							{
+								for (auto segment : *segment_list)
+								{
+									std::string ts_cmd_str = segment.uri;
+									HTTPTSCMD ts_cmd;
+									memcpy(ts_cmd.cmd, ts_cmd_str.data(), segment.uri.length());
+									ts_cmd.cmd_length = ts_cmd_str.length();
+									std::map<string, string>::iterator iter = all_ts_task.find(ts_cmd_str);
+									if (iter == all_ts_task.end())//此任务没有添加过
+									{
+										boost::posix_time::ptime now = boost::posix_time::second_clock::local_time();
+										std::string cur_time = boost::posix_time::to_iso_string(now);
+										all_ts_task.insert(std::make_pair(ts_cmd_str, cur_time));
+										ts_queue_ptr->push(ts_cmd);
+									}
+									//将当前10分钟之前的task从map中删除掉
+								}
+							}
+						}
+						m3u8_content.clear();
+					}
+				});
+				while (1)
+				{
+					http_client->get(play_stream.second);
+					this_thread::sleep_for(std::chrono::seconds(play_duration));
+				}
+			}));
+		}
+	}
 	return 0;
 }
 
@@ -1061,12 +503,16 @@ int StreamReceiver::_do_ts_task()
 		while (ts_task_list_.pop(ts_cmd_struct))
 		{
 			_send_ts_cmd(ts_cmd_struct.cmd);
+			if (!ts_conn_.connected())
+			{
+				ts_conn_ = ts_http_client_ptr_->subscribe_data(boost::bind(&StreamReceiver::tsCallback, this, _1, _2, _3));
+			}
 		}
-		if (b_exit)
+		if (b_exit_ts_task_)
 		{
 			break;
 		}
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        std::this_thread::sleep_for(std::chrono::nanoseconds(1));
     }
 	return E_OK;
 }
@@ -1144,5 +590,150 @@ void StreamReceiver::_write_content_to_file(const string &out_file_name, char *d
 void StreamReceiver::unsubcribe_ts_callback()
 {
 	ts_send_signal_.disconnect_all_slots();
+}
+
+void StreamReceiver::_do_parse_ts_data()
+{
+	StreamSenderBuffer sender_buffer;
+	CTsPacket ts_packet;
+	TS_PACKET_CONTENT ts_data;
+	long int ts_packet_num = 0;
+
+	long int pcr_first_packet_num = 0;//找到第一包PCR收到的数据包
+	long int pcr_second_packet_num = 0;//找到第二包PCR收到的数据包
+	long int pcr_duration_packet_num = 0;
+	long int pcr_front = 0;
+	long int pcr_end = 0;
+	long int max_pcr = 0;
+	bool is_find_first_pcr = false;
+	while (1)
+	{
+		if (b_exit_ts_task_)
+		{
+			break;
+		}
+		while (ts_packet_queue_.pop(ts_data))
+		{
+			if (ts_data.real_size < TS_PACKET_LENGTH_STANDARD)
+			{
+				vvlog_e("ts not complete packet");
+			}
+			if (!ts_data.content || ts_data.content[0] != 0x47)
+			{
+				assert(false);
+			}
+			//memset(&ts_data, 0, sizeof(ts_data));
+			//continue;
+			if (ts_packet.SetPacket((BYTE*)ts_data.content))
+			{
+				PCR packet_pcr = ts_packet.Get_PCR();
+				WORD pid = ts_packet.Get_PID();
+				int result = sender_buffer.push_to_buffer(ts_data.content, ts_data.real_size);
+				if (E_OK != result)
+				{
+					vvlog_e("push ts data to sender buff fail, error:" << result);
+				}
+				ts_packet_num++;
+				if (INVALID_PCR != packet_pcr)
+				{
+					if (!is_find_first_pcr)//
+					{
+						is_find_first_pcr = true;
+						pcr_front = pcr_end = packet_pcr;
+						pcr_first_packet_num = ts_packet_num;
+					}
+					else
+					{
+						pcr_front = pcr_end;
+						pcr_end = packet_pcr;
+						if (pcr_end < pcr_front)
+						{
+							max_pcr = pcr_front;
+							pcr_front = 0;
+						}
+						pcr_second_packet_num = ts_packet_num;
+						pcr_duration_packet_num = pcr_second_packet_num - pcr_first_packet_num;
+						long int system_clock_reference = 27;
+						double tranlate_rate = (double)(8 * pcr_duration_packet_num*TS_PACKET_LENGTH_STANDARD*system_clock_reference) / (pcr_end - pcr_front);
+						//double tranlate_interval_time = (double)(TS_PACKET_LENGTH_STANDARD * 7 * 8) / (long)(1000 * tranlate_rate);//发送188*7需要的时间 ms
+						double tranlate_interval_time = (double)(TS_PACKET_LENGTH_STANDARD * 7 * 8) / (long)(tranlate_rate);//发送188*7需要的时间 micro
+						//vvlog_i("url:" << play_stream_ << "tsNum:" << pcr_duration_packet_num << "first_pcr:" << pcr_front << "pcr_end:" << pcr_end\
+							<< "rate:" << tranlate_rate << "time:" << tranlate_interval_time);
+						pcr_first_packet_num = pcr_second_packet_num = ts_packet_num = 0;
+						_push_ts_data_to_send_queue(sender_buffer.get_data(), sender_buffer.get_data_length(), tranlate_interval_time);
+						sender_buffer.reset_buffer();
+					}
+				}
+			}
+			else
+			{
+				//if (out_ts_file_)
+				//{
+				//	fwrite(ts_data.content, 1, ts_data.real_size, out_ts_file_);
+				//}
+				std::cout << "invaild packet, url:" << std::endl;
+				//vvlog_e("it is a invalid packet!! receiverurl:"<<receive_url_ << "len:" << ts_data.real_size);
+			}
+			memset(&ts_data, 0, sizeof(ts_data));
+		}
+		memset(&ts_data, 0, sizeof(ts_data));
+		this_thread::sleep_for(std::chrono::nanoseconds(1));
+	}
+
+}
+
+void StreamReceiver::_push_ts_data_to_send_queue(char *data, const long int &data_len, const int &need_time/*bytes:(188*7):micro*/)
+{
+	char *tmp_data = data;
+	long int tmp_data_len = data_len;
+	TS_SEND_CONTENT ts_send_content;
+	while (TS_SEND_SIZE <= tmp_data_len)
+	{
+		memcpy(ts_send_content.content, tmp_data, TS_SEND_SIZE);
+		ts_send_content.need_time = need_time;
+		ts_send_content.real_size = TS_SEND_SIZE;
+		//TSSendQueueType *queue_ptr = &ts_send_content_queue_;
+		while (!ts_send_content_queue_.push(ts_send_content))
+		{
+			this_thread::sleep_for(std::chrono::microseconds(1));
+			//vvlog_e("push ts send content to queue faile, url:"<< play_stream_);
+		}
+		tmp_data_len -=TS_SEND_SIZE;
+		tmp_data = tmp_data + TS_SEND_SIZE;
+		memset(&ts_send_content, 0, sizeof(ts_send_content));
+	}
+	if (0 < tmp_data_len)
+	{
+		memcpy(ts_send_content.content, tmp_data, tmp_data_len);
+		ts_send_content.need_time = (tmp_data_len*need_time) / (TS_SEND_SIZE);
+		ts_send_content.real_size = tmp_data_len;
+		while (!ts_send_content_queue_.push(ts_send_content))
+		{
+			this_thread::sleep_for(std::chrono::microseconds(1));
+			//vvlog_e("push ts send content to queue fail, url:" << play_stream_);
+		}
+		memset(&ts_send_content, 0, sizeof(ts_send_content));
+	}
+
+}
+
+int StreamReceiver::_remove_ts_cmd(const long int time_second)
+{
+	boost::posix_time::ptime now = boost::posix_time::second_clock::local_time();
+	boost::posix_time::ptime del_time = now - boost::posix_time::seconds(time_second);
+	std::vector<std::string> remove_task;
+	for (auto item : ts_all_task_map_)
+	{
+		boost::posix_time::ptime task_time(boost::posix_time::from_iso_string(item.second));
+		if (task_time < del_time)
+		{
+			remove_task.push_back(item.first);
+		}
+	}
+	for (auto del_task : remove_task)
+	{
+		ts_all_task_map_.erase(del_task);
+	}
+	return E_OK;
 }
 

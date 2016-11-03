@@ -78,7 +78,8 @@ void StreamManager::_do_add_tasks_callback()
 						<< "multiaddress cout:" << task_content.addr_cout\
 						<< "address:" << multi_addr);
 				}
-			}
+				this_thread::sleep_for(std::chrono::seconds(1));
+				}
 			this_thread::sleep_for(chrono::milliseconds(1));
 			if (is_exit_)
 			{
@@ -143,7 +144,9 @@ bool StreamManager::_do_add_task(const TASKCONTENT &task_content)
 		receiver_ptr = make_shared<StreamReceiver>(task_content.url);
 		if (0 < task_content.addr_cout)
 		{
-			sender_ptr = make_shared<StreamSender>();
+			//sender_ptr = make_shared<StreamSender>();
+			
+			sender_ptr = make_shared<StreamSender>(receiver_ptr);
 			sender_ptr->set_delay_time(task_content.delay_time_ms);
 			sender_ptr->set_receive_url(task_content.url);
 			for (int index = 0; index < task_content.addr_cout; index++)
@@ -163,7 +166,6 @@ bool StreamManager::_do_add_task(const TASKCONTENT &task_content)
 			{
 				stream_content.sender = sender_ptr;
 				stream_content.receiver = receiver_ptr;
-				receiver_ptr->subcribe_ts_callback(boost::bind(&StreamSender::stream_receive_callback, sender_ptr, _1, _2,_3));
 				stream_map_.insert(std::make_pair(task_content.url, stream_content));
 			}
 		}
@@ -209,7 +211,9 @@ bool StreamManager::_do_remove_task(const TASKCONTENT &task_content)
 		if (task_content.addr_cout == multi_ip_count)//无转发任务
 		{
 			iter->second.receiver->stop();
+			iter->second.receiver->unsubcribe_ts_callback();
 			iter->second.sender->stop();
+
 			stream_map_.erase(task_content.url);//从流表中删除
 		}
 	}

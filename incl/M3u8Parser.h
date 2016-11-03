@@ -1,6 +1,4 @@
 #pragma once
-#include "m3u8define.h"
-#include "pre_regex.h"
 #include <map>
 #include <vector>
 #include <iostream>
@@ -8,6 +6,11 @@
 #ifdef __linux__
 #include <strings.h>
 #endif // linux
+
+#include "m3u8define.h"
+#include "pre_regex.h"
+#include <boost/filesystem.hpp>
+#include "errcode.h"
 //warning not thread safe.
 
 inline const char * STRSTR(const char *src, const char *substr)
@@ -45,6 +48,35 @@ inline bool v_str_is_start_with(const std::string &src, const std::string &flag)
 	}
 };
 
+/*
+	* remove sep charaters from string 
+	* example src "dfjsdlf\"df,\"dfd," dest "dfjsdlf\"df\"dfd"
+*/
+inline std::string v_str_remove_quotes(const std::string &src, const std::string sep = ",")
+{
+	std::string dest_str = src;
+	int first_pos = dest_str.find("\"");
+	std::vector<int> remove_index_list;
+	while (string::npos != first_pos)
+	{
+		int second_pos = dest_str.find("\"", first_pos+1);
+		if (string::npos != second_pos)
+		{
+			int length = second_pos - first_pos;
+			int pos=dest_str.find(",", first_pos+1);
+			if (std::string::npos != pos && pos < second_pos)
+			{
+				remove_index_list.push_back(pos);
+			}
+		}
+		first_pos = dest_str.find("\"", second_pos+1);
+	}
+	for (auto remove_index : remove_index_list)
+	{
+		dest_str.erase(remove_index, 1);
+	}
+	return dest_str;
+}
 inline int v_str_split(const std::string& str, std::vector<std::string>& ret_, std::string sep = ",")
 {
 	if (str.empty())
@@ -91,7 +123,7 @@ inline std::string v_str_replace(const std::string& src, const std::string& repl
 #endif
 		ret.append(src.data() + pos_begin, pos - pos_begin);
 		ret += dest;
-		pos_begin = pos + 1;
+		pos_begin = pos + replacement.length();
 		pos = src.find(replacement, pos_begin);
 	}
 	if (pos_begin < src.length())
@@ -130,25 +162,28 @@ typedef struct M3u8BaseData
 class M3u8Parser
 {
 public:
-	M3u8Parser(const std::string &content);
+	//M3u8Parser(const std::string &content);
+	M3u8Parser(const std::string uri, const std::string &content);
 	~M3u8Parser();
 	//static M3u8NormalData s_data;
 	//static std::map<std::string, ContentType>s_data;
 	typedef std::map<std::string, ContentType>::iterator DATA_ITER;
-	static std::map<std::string, bool> s_state;
 
+	bool is_variant_play_list() const { return data_.is_variant; }
+	bool get_play_list(PlayListList *&play_list);
+	bool get_segments(M3U8SegmentList *&segment_list);
 	bool get_ts_file_list(std::vector<std::string> &ts_file_list);
 	float get_max_duration();
 private:
 	//int _parse_key(const std::string &content);
-	int _parse_extintf(const std::string &content, const int &line_no, bool strict);
-	int _parse_ts_chunk(const std::string &content);
+	int _parse_extintf(M3U8Segment *segment, const std::string &content, const int &line_no, bool strict);
+	int _parse_ts_chunk(M3U8Segment *segment, const std::string &content);
 	//int _parse_attribute_list(const std::string prefix, const std::string &content, void* func);
-	//int _parse_stream_inf(const std::string &content);
+	int _parse_stream_inf(StreamInfo *stream_info, const std::string &content);
 	//int _parse_i_frame_stream_inf(const std::string &content);
-	//int _parse_media(const std::string &content);
-	//int _parse_variant_playlist(const std::string &content);
-	//int _parse_byterange(const std::string &content);
+	int _parse_media(MediaInfo*media_info, const std::string &content);
+	int _parse_variant_playlist(StreamInfo*stream_info, MediaInfo*media_info, const std::string &content);
+	int _parse_byterange(M3U8Segment *segment, const std::string &content);
 	int _parse_simple_parameter_raw_value(const std::string &content, const std::string &cast_to, bool normalize=false);
 	int _parse_and_set_simple_parameter_raw_value(const std::string &content, const std::string &cast_to, bool normalize=false);
 	int _parse_simple_parameter(const std::string &content, const std::string &cast_to);
@@ -158,5 +193,9 @@ private:
 	std::vector<std::string> content_lines_;
 	M3u8BaseData m3u8_data_;
 	std::string m3u8_content_;
+
+	std::string uri_;
+	M3U8Data data_;
+	M3U8State parser_state_;
 };
 
