@@ -192,11 +192,12 @@ void test_udp_client(const string &addr, const int &port)
 		while (ts_send_content_queue_.pop(ts_content))
 		{
 			//client->write(ts_content.content, ts_content.real_size, ts_content.need_time);
+			int64_t success_time;
 			client->write_ext(ts_content.content\
 				, ts_content.real_size\
 				, ts_content.need_time\
 				, "224.1.1.1"\
-				, 65002);
+				, 65002, &success_time);
 		}
 		this_thread::sleep_for(std::chrono::microseconds(1));
 	}

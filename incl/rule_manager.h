@@ -71,6 +71,7 @@ public:
 
 	bool get_del_task(TASKCONTENT &task_content);
 
+	bool get_local_ip(std::string &local_ip);
 protected:
 	/**
 	 * @brief start_task start task to load file with a time interveral.
@@ -113,5 +114,8 @@ private:
 	//std::map<const string, const string> stream_distribute_rules_;
 	RULECONTENTTYPE stream_distribute_rules_;
 	typedef std::map<const string, const RULECONTENT>::iterator stream_rule_iter;
+
+	std::mutex local_ip_mtx;
+	std::string local_ip_;
 };
 typedef std::shared_ptr<RuleManager> RuleManagerPtr;

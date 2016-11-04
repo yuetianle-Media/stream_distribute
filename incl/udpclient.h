@@ -14,11 +14,13 @@ class UDPClient:public UDPSocketSession
 {
 public:
 	UDPClient(const int &local_port, const int &timeout_ms, const string &remote_addr, const int &remote_port);
-	UDPClient(const int &local_port, const int &timeout_ms);
+	UDPClient(const int &local_port, const int &timeout_ms, const std::string &local_ip="127.0.0.1");
 	~UDPClient();
 
 
-	int write_ext(char *data, const long int &data_len, const double &need_time, const string &remote_addr, const int &remote_port);
+	int write_ext(char *data, const long int &data_len\
+		, const double &need_time, const string &remote_addr\
+		, const int &remote_port, int64_t* success_time);
 	int write(char *data, const int &data_len);
 	int write(char *data, const int &data_len, const double &need_time);
 	int receive(const int &data_len=0);

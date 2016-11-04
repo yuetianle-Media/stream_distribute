@@ -32,7 +32,7 @@ private:
 	void _do_add_tasks_callback();
 	void _do_del_tasks_callback();
 
-	bool _do_add_task(const TASKCONTENT &task_content);
+	bool _do_add_task(const TASKCONTENT &task_content, const std::string &local_addr = "");
 	bool _do_remove_task(const TASKCONTENT &task_content);
 
 	std::shared_ptr<std::thread> add_task_;

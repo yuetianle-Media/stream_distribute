@@ -27,7 +27,7 @@ class StreamSender :public std::enable_shared_from_this<StreamSender>
 {
 public:
 	StreamSender();
-	StreamSender(StreamReceiverPtr receiver);
+	StreamSender(StreamReceiverPtr receiver, const string &local_ip="127.0.0.1");
 	~StreamSender();
 
 	int start();
@@ -37,6 +37,7 @@ public:
 	bool del_sender_address(const string &remote_addr, const int &port);
 
 	void set_delay_time(const int &delay_time_ms);
+	void set_local_ip(const string &local_ip);
 	void set_receive_url(const string &url);
 private:
 
@@ -60,6 +61,8 @@ private:
 
 	StreamReceiverPtr stream_receiver_;
 	std::string receive_url_;
+
+	std::string local_ip_;
 };
 
 typedef std::shared_ptr<StreamSender> StreamSenderPtr;

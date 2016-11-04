@@ -8,7 +8,7 @@ StreamReceiver::StreamReceiver(const string &url)
 	, m3u8_thrd_ptr_(nullptr), ts_thrd_ptr_(nullptr), parse_ts_thrd_(nullptr)\
 	, b_exit_m3u8_task_(false), b_exit_ts_task_(false), b_exit_parse_task_(false)\
 	, ts_file_index_(0), uri_(url), receive_ts_buffer_(TS_PACKET_LENGTH_STANDARD*7*1000)\
-	, ts_packet_queue_(32780), ts_send_content_queue_(28000), play_stream_count_(0)
+	, /*ts_packet_queue_(32780), ts_send_content_queue_(28000),*/ play_stream_count_(0)
 {
 	play_stream_ = uri_;
 	ostringstream ss_out;
@@ -31,16 +31,16 @@ StreamReceiver::~StreamReceiver()
 	b_exit_ts_task_ = true;
 	b_exit_parse_task_ = true;
 	std::cout << "come desctruct Stream receiver" << std::endl;
-	if (!ts_packet_queue_.empty())
+	if (!ts_spsc_packet_queue.empty())
 	{
-		ts_packet_queue_.consume_all([](TS_PACKET_CONTENT item) 
+		ts_spsc_packet_queue.consume_all([](TS_PACKET_CONTENT item) 
 		{
 			;
 		});
 	}
-	if (!ts_send_content_queue_.empty())
+	if (!ts_send_spsc_queue_.empty())
 	{
-		ts_send_content_queue_.consume_all([](TSSENDCONTENT item) 
+		ts_send_spsc_queue_.consume_all([](TSSENDCONTENT item) 
 		{
 			;
 		});
@@ -377,14 +377,15 @@ void StreamReceiver::tsCallback(char *data, const long int &data_len, const bool
 			TS_PACKET_CONTENT one_ts_data;
 			if (receive_ts_buffer_.pop_data(one_ts_data.content, TS_PACKET_LENGTH_STANDARD, TS_PACKET_LENGTH_STANDARD))
 			{
-				if (0 < one_ts_data.real_size &&(!one_ts_data.content || one_ts_data.content[0] != 0x47))
+				if (!one_ts_data.content || one_ts_data.content[0] != 0x47)
 				{
 					assert(false);
 				}
 				one_ts_data.real_size = TS_PACKET_LENGTH_STANDARD;
-				while (!ts_packet_queue_.push(one_ts_data))
+				//while (!ts_packet_queue_.push(one_ts_data))
+				while(!ts_spsc_packet_queue.push(one_ts_data))
 				{
-					this_thread::sleep_for(std::chrono::microseconds(1));
+					this_thread::sleep_for(std::chrono::nanoseconds(1));
 					if (b_exit_ts_task_)
 					{
 						break;
@@ -612,7 +613,8 @@ void StreamReceiver::_do_parse_ts_data()
 		{
 			break;
 		}
-		while (ts_packet_queue_.pop(ts_data))
+		//while (ts_packet_queue_.pop(ts_data))
+		while (ts_spsc_packet_queue.pop(ts_data))
 		{
 			if (ts_data.real_size < TS_PACKET_LENGTH_STANDARD)
 			{
@@ -656,9 +658,11 @@ void StreamReceiver::_do_parse_ts_data()
 						long int system_clock_reference = 27;
 						double tranlate_rate = (double)(8 * pcr_duration_packet_num*TS_PACKET_LENGTH_STANDARD*system_clock_reference) / (pcr_end - pcr_front);
 						//double tranlate_interval_time = (double)(TS_PACKET_LENGTH_STANDARD * 7 * 8) / (long)(1000 * tranlate_rate);//发送188*7需要的时间 ms
-						double tranlate_interval_time = (double)(TS_PACKET_LENGTH_STANDARD * 7 * 8) / (long)(tranlate_rate);//发送188*7需要的时间 micro
+						double tranlate_rate_byte_micro = tranlate_rate * 1024 * 1024 / (1*1000 * 1000);
+						//double tranlate_interval_time = (double)(TS_PACKET_LENGTH_STANDARD * 7 * 8) / (long)(tranlate_rate);//发送188*7需要的时间 micro
+						double tranlate_interval_time = (double)(TS_PACKET_LENGTH_STANDARD * 7 * 8) / (tranlate_rate_byte_micro);//发送188*7需要的时间 micro
 						//vvlog_i("url:" << play_stream_ << "tsNum:" << pcr_duration_packet_num << "first_pcr:" << pcr_front << "pcr_end:" << pcr_end\
-							<< "rate:" << tranlate_rate << "time:" << tranlate_interval_time);
+							<< "rate:" << tranlate_rate_byte_micro << "time:" << tranlate_interval_time);
 						pcr_first_packet_num = pcr_second_packet_num = ts_packet_num = 0;
 						_push_ts_data_to_send_queue(sender_buffer.get_data(), sender_buffer.get_data_length(), tranlate_interval_time);
 						sender_buffer.reset_buffer();
@@ -693,8 +697,13 @@ void StreamReceiver::_push_ts_data_to_send_queue(char *data, const long int &dat
 		ts_send_content.need_time = need_time;
 		ts_send_content.real_size = TS_SEND_SIZE;
 		//TSSendQueueType *queue_ptr = &ts_send_content_queue_;
-		while (!ts_send_content_queue_.push(ts_send_content))
+		//while (!ts_send_content_queue_.push(ts_send_content))
+		while (!ts_send_spsc_queue_.push(ts_send_content))
 		{
+			if (b_exit_ts_task_)
+			{
+				break;
+			}
 			this_thread::sleep_for(std::chrono::microseconds(1));
 			//vvlog_e("push ts send content to queue faile, url:"<< play_stream_);
 		}
@@ -707,8 +716,13 @@ void StreamReceiver::_push_ts_data_to_send_queue(char *data, const long int &dat
 		memcpy(ts_send_content.content, tmp_data, tmp_data_len);
 		ts_send_content.need_time = (tmp_data_len*need_time) / (TS_SEND_SIZE);
 		ts_send_content.real_size = tmp_data_len;
-		while (!ts_send_content_queue_.push(ts_send_content))
+		//while (!ts_send_content_queue_.push(ts_send_content))
+		while (!ts_send_spsc_queue_.push(ts_send_content))
 		{
+			if (b_exit_ts_task_)
+			{
+				break;
+			}
 			this_thread::sleep_for(std::chrono::microseconds(1));
 			//vvlog_e("push ts send content to queue fail, url:" << play_stream_);
 		}

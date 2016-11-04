@@ -15,7 +15,7 @@ using namespace std;
 class UDPSocketSession :public std::enable_shared_from_this<UDPSocketSession>
 {
 public:
-	UDPSocketSession(const int &local_port, const int &timeout_ms);
+	UDPSocketSession(const int &local_port, const int &timeout_ms, const std::string &local_ip="127.0.0.1");
 	~UDPSocketSession();
 
 	typedef std::promise<int> coro_promise;

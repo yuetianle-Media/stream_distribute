@@ -1,5 +1,6 @@
 #pragma once
 #include <boost/lockfree/queue.hpp>
+#include <boost/lockfree/spsc_queue.hpp>
 #include <stdio.h> 
 #include <string.h>
 #include "dvb.h"
@@ -22,6 +23,7 @@ typedef struct TS_SEND_CONTENT
 
 //typedef boost::lockfree::queue<TSSENDCONTENT, boost::lockfree::fixed_sized<false>> TSSendQueueType;
 typedef boost::lockfree::queue<TSSENDCONTENT, boost::lockfree::fixed_sized<true>> TSSendQueueType;
+typedef boost::lockfree::spsc_queue<TSSENDCONTENT, boost::lockfree::capacity<1024 * 50>> TSSendSpscQueueType;
 
 typedef struct TSPACKETCONTENT
 {
@@ -35,7 +37,7 @@ typedef struct TSPACKETCONTENT
 }TS_PACKET_CONTENT;//Ò»¸öts°ü
 
 typedef boost::lockfree::queue<TS_PACKET_CONTENT, boost::lockfree::fixed_sized<true>> TSPacketQueueType;
-
+typedef boost::lockfree::spsc_queue<TS_PACKET_CONTENT, boost::lockfree::capacity<64000>> TSPacketSpscQueueType;
 typedef boost::lockfree::queue<HTTPTSCMD, boost::lockfree::fixed_sized<true>> TSTaskType;
 
 using TSTaskTypePtr = std::shared_ptr<TSTaskType>;

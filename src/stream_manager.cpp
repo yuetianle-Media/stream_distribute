@@ -66,7 +66,17 @@ void StreamManager::_do_add_tasks_callback()
 						<< ":" << task_content.remote_addr_list[index].port << ";";
 				}
 				multi_addr = ss_out.str();
-				if (_do_add_task(task_content))
+				std::string local_ip;
+				bool add_success = false;
+				if (rules_manager_->get_local_ip(local_ip) && !local_ip.empty())
+				{
+					add_success = _do_add_task(task_content, local_ip);
+				}
+				else
+				{
+					add_success = _do_add_task(task_content);
+				}
+				if (add_success)
 				{
 					vvlog_i("add stream task success url:" << task_content.url\
 						<< "multiaddress cout:" << task_content.addr_cout\
@@ -79,7 +89,7 @@ void StreamManager::_do_add_tasks_callback()
 						<< "address:" << multi_addr);
 				}
 				this_thread::sleep_for(std::chrono::seconds(1));
-				}
+			}
 			this_thread::sleep_for(chrono::milliseconds(1));
 			if (is_exit_)
 			{
@@ -128,7 +138,7 @@ void StreamManager::_do_del_tasks_callback()
 
 }
 
-bool StreamManager::_do_add_task(const TASKCONTENT &task_content)
+bool StreamManager::_do_add_task(const TASKCONTENT &task_content, const std::string &local_addr)
 {
 	StreamReceiverPtr receiver_ptr = nullptr;
 	StreamSenderPtr sender_ptr = nullptr;
@@ -147,6 +157,10 @@ bool StreamManager::_do_add_task(const TASKCONTENT &task_content)
 			//sender_ptr = make_shared<StreamSender>();
 			
 			sender_ptr = make_shared<StreamSender>(receiver_ptr);
+			if (!local_addr.empty())
+			{
+				sender_ptr->set_local_ip(local_addr);
+			}
 			sender_ptr->set_delay_time(task_content.delay_time_ms);
 			sender_ptr->set_receive_url(task_content.url);
 			for (int index = 0; index < task_content.addr_cout; index++)

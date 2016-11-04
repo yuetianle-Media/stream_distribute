@@ -32,8 +32,16 @@ int RuleManager::_load_config_file(const string &config_file)
 	pugi::xml_parse_result result = doc_.load_file(config_file_path.c_str());
 	if (pugi::xml_parse_status::status_ok == result.status)
 	{
+
+		pugi::xml_node local_address_node = doc_.child("local_address");
+		if (local_address_node)
+		{
+			v_lock(lk, local_ip_mtx);
+			local_ip_ = local_address_node.attribute("ip").as_string();
+		}
+		pugi::xml_node rules_node = doc_.child("rules");
 		pugi::xml_node root_node = doc_.first_child();
-		for (pugi::xml_node_iterator it = root_node.begin(); it != root_node.end(); it++)
+		for (pugi::xml_node_iterator it = rules_node.begin(); it != rules_node.end(); it++)
 		{
 			TASKCONTENT task_content;
 			string url = it->attribute((char*)(RuleManager::URL_ATTR_NAME)).as_string();
@@ -110,8 +118,14 @@ int RuleManager::_load_config_file(const string &config_file, RULECONTENTTYPE &c
 	pugi::xml_parse_result result = doc_.load_file(config_file_path.c_str());
 	if (pugi::xml_parse_status::status_ok == result.status)
 	{
-		pugi::xml_node root_node = doc_.first_child();
-		for (pugi::xml_node_iterator it = root_node.begin(); it != root_node.end(); it++)
+		pugi::xml_node local_address_node = doc_.child("local_address");
+		if (local_address_node)
+		{
+			v_lock(lk, local_ip_mtx);
+			local_ip_ = local_address_node.attribute("ip").as_string();
+		}
+		pugi::xml_node rules_node = doc_.child("rules");
+		for (pugi::xml_node_iterator it = rules_node.begin(); it != rules_node.end(); it++)
 		{
 			string url = it->attribute((char*)(RuleManager::URL_ATTR_NAME)).as_string();
 			pugi::xml_attribute delay_time_attr =  it->attribute((char*)(RuleManager::URL_ATTR_DELAY_TIME));
@@ -319,6 +333,19 @@ bool RuleManager::get_del_task(TASKCONTENT &task_content)
 {
 	if (del_task_list_.pop(task_content))
 	{
+		return true;
+	}
+	else
+	{
+		return false;
+	}
+}
+
+bool RuleManager::get_local_ip(std::string &local_ip)
+{
+	if (!local_ip_.empty())
+	{
+		local_ip = local_ip_;
 		return true;
 	}
 	else

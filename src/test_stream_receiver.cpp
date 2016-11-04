@@ -46,7 +46,7 @@ void test_stream_receive(const std::string &url)
 	stream_receiver.start();
 	out_ts_file.append(boost::posix_time::to_iso_string(boost::posix_time::second_clock::local_time())).append(".ts");
 	open_file = fopen(out_ts_file.data(), "ab");
-	TSSendQueueType *ts_send_queue = nullptr;
+	TSSendSpscQueueType *ts_send_queue = nullptr;
 	bool is_finished = false;
 	auto consume_task(new thread([&]()
 	{

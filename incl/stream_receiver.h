@@ -39,7 +39,8 @@ public:
 
 	int start();
 	void stop();
-	bool get_send_queue(TSSendQueueType *&send_queue) { send_queue = &ts_send_content_queue_; return true; }
+	//bool get_send_queue(TSSendQueueType *&send_queue) { send_queue = &ts_send_content_queue_; return true; }
+	bool get_send_queue(TSSendSpscQueueType *&send_queue) { send_queue = &ts_send_spsc_queue_; return true; }
 public:
     /**
      * @brief subcribe_ts_callback 订阅ts流数据.
@@ -137,8 +138,10 @@ private:
 	std::string m3u8_content_;
 
 	StreamBuffer receive_ts_buffer_;
-	TSPacketQueueType ts_packet_queue_;//32K一级数据缓存大小
-	TSSendQueueType ts_send_content_queue_;//128k二级缓存大小
+	//TSPacketQueueType ts_packet_queue_;//32K一级数据缓存大小
+	TSPacketSpscQueueType ts_spsc_packet_queue;
+	//TSSendQueueType ts_send_content_queue_;//128k二级缓存大小
+	TSSendSpscQueueType ts_send_spsc_queue_;//50M容量
 	
 	TSTaskGroup ts_task_group_;
 	std::map<int, int> ts_task_group_2;

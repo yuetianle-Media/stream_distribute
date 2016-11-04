@@ -1,15 +1,26 @@
 #include "stdafx.h"
 #include "udp_socket_session.h"
 
-UDPSocketSession::UDPSocketSession(const int &local_port, const int &timeout_ms)
+UDPSocketSession::UDPSocketSession(const int &local_port, const int &timeout_ms, const std::string &local_ip/*="127.0.0.1"*/)
     : local_port_(local_port)\
 	, time_out_ms_(timeout_ms)\
-	, io_svt_ptr_(make_shared<boost::asio::io_service>())\
+	, io_svt_ptr_(make_shared<boost::asio::io_service>())
 	, udp_socket_(*io_svt_ptr_, boost::asio::ip::udp::endpoint(boost::asio::ip::udp::v4(), local_port))
 	, strand_(udp_socket_.get_io_service())\
 	, timer_ptr_(0)
 {
 	work_ = make_shared<boost::asio::io_service::work>(*io_svt_ptr_);
+	boost::asio::ip::address_v4 local_interface = boost::asio::ip::address_v4::from_string(local_ip);
+	if (!local_interface.is_loopback())
+	{
+		boost::asio::ip::multicast::outbound_interface bound_interface(local_interface);
+		boost::system::error_code ec;
+		udp_socket_.set_option(bound_interface, ec);
+		if (!ec)
+		{
+			std::cout << "bound success" << std::endl;
+		}
+	}
 	auto svc = io_svt_ptr_;
 	thread thrd([svc]
 	{
@@ -17,7 +28,6 @@ UDPSocketSession::UDPSocketSession(const int &local_port, const int &timeout_ms)
 		svc->run(ec);
 	});
 	thrd.detach();
-
 }
 
 UDPSocketSession::~UDPSocketSession()
