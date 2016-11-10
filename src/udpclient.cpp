@@ -25,11 +25,20 @@ UDPClient::~UDPClient()
 
 }
 
-int UDPClient::write_ext(char *data, const long int &data_len, const double &need_time, const string &remote_addr, const int &remote_port, int64_t* success_time)
+
+int UDPClient::sync_write(char *data, const long &data_size, const string &ip, const long &port)
+{
+	if (udp_socket_.is_open())
+	{
+		boost::asio::ip::udp::endpoint remote_ep(boost::asio::ip::address_v4::from_string(ip), port);
+		udp_socket_.send_to(boost::asio::buffer(data, data_size), remote_ep);
+	}
+	return E_OK;
+}
+
+int UDPClient::write_ext(char *data, const long int &data_len, const double &need_time, const string &remote_addr, const int &remote_port)
 {
 	auto self = shared_from_this();
-	//if (success_time)
-	//	*success_time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 	boost::asio::ip::udp::endpoint remote_ep(boost::asio::ip::address_v4::from_string(remote_addr), remote_port);
 	int result = _run_sync_action([this, self, data, data_len, remote_ep]\
 		(const coro_promise_ptr &porm , const coro_timer_ptr &ptimer , boost::asio::yield_context yield)
@@ -59,13 +68,7 @@ int UDPClient::write_ext(char *data, const long int &data_len, const double &nee
 		{
 		}
 	}, (long int)time_out_ms_*1000);
-	if (result != E_OK)
-	{
-		//vvlog_e("udp send cmd end faile cmd:" << data);
-		//_close();
-	}
-
-	return E_OK;
+	return result;
 }
 
 int UDPClient::write(char *data, const int &data_len)

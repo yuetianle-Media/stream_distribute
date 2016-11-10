@@ -41,9 +41,9 @@ inline void receive_ts_data(char *data, const int&data_len, const bool &is_finis
 };
 void test_stream_receive(const std::string &url)
 {
-	StreamReceiver stream_receiver(url);
+	StreamReceiverPtr stream_receiver = make_shared<StreamReceiver>(url);
 	HttpCurlClient::init();
-	stream_receiver.start();
+	stream_receiver->start();
 	out_ts_file.append(boost::posix_time::to_iso_string(boost::posix_time::second_clock::local_time())).append(".ts");
 	open_file = fopen(out_ts_file.data(), "ab");
 	TSSendSpscQueueType *ts_send_queue = nullptr;
@@ -56,7 +56,7 @@ void test_stream_receive(const std::string &url)
 			{
 				break;
 			}
-			if (stream_receiver.get_send_queue(ts_send_queue) && ts_send_queue)
+			if (stream_receiver->get_send_queue(ts_send_queue) && ts_send_queue)
 			{
 				ts_send_queue->consume_all([](TSSENDCONTENT item) 
 				{
@@ -69,16 +69,46 @@ void test_stream_receive(const std::string &url)
 		}
 	}));
 	//stream_receiver.subcribe_ts_callback(boost::bind(receive_ts_data,_1,_2, _3));
-	this_thread::sleep_for(std::chrono::seconds(60*3));
+	this_thread::sleep_for(std::chrono::seconds(60*10));
 	is_finished = true;
 	consume_task->join();
-	stream_receiver.stop();
+	stream_receiver->stop();
 	if (open_file)
 	{
 		fclose(open_file);
 	}
 	HttpCurlClient::uninit();
 };
+
+void test_async_task()
+{
+	std::vector<std::shared_ptr<std::thread>> task_list;
+	std::async(std::launch::async, [&]() {
+		std::shared_ptr<std::thread> task = std::make_shared<std::thread>([&] {
+			while (1)
+			{
+				vvlog_i("task one this is cout");
+				this_thread::sleep_for(std::chrono::milliseconds(20));
+			}
+		});
+		task_list.push_back(task);
+	});
+
+	std::async(std::launch::async, [&]() {
+		std::shared_ptr<std::thread> task = std::make_shared<std::thread>([&] {
+			while (1)
+			{
+				vvlog_i("task two this is cout");
+				this_thread::sleep_for(std::chrono::milliseconds(20));
+			}
+		});
+		task_list.push_back(task);
+	});
+	while (true)
+	{
+		this_thread::sleep_for(std::chrono::seconds(5));
+	}
+}
 
 void test_stream_ts_callback(const std::string &ts_file_name)
 {

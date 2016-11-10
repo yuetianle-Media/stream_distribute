@@ -269,10 +269,20 @@ int tcp_option_callback(void *client_tp, curl_socket_t curlfd, curlsocktype purp
 		sock_linker.l_onoff = 1;
 		sock_linker.l_linker = 3;
 		int result = setsockopt(curlfd, SOL_SOCKET, SO_LINGER, (const char*)&sock_linker, sizeof(linker));
+		int recv_size = (int)(1024 * 1024 * 1.25);
 		if (0 != result)
 		{
 #ifdef WIN32
 			std::cout << "socket set linker error:" << result << std::endl;
+#else
+			perror("socket set linker error:");
+#endif // WIN32
+		}
+		result = setsockopt(curlfd, SOL_SOCKET, SO_RCVBUF, (char*)&recv_size, sizeof(recv_size));
+		if (0 != result)
+		{
+#ifdef WIN32
+			std::cout << "socket set receive error:" << result << std::endl;
 #else
 			perror("socket set linker error:");
 #endif // WIN32

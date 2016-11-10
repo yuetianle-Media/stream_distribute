@@ -33,7 +33,31 @@ void open_ts_file(const string &file_name)
 	
 }
 
-boost::lockfree::queue<TSSENDCONTENT, boost::lockfree::fixed_sized<true>> ts_send_content_queue_(30000);
+//BOOL get_pcr(const PBYTE p_ts_packet, INT64* p_pcr, INT* p_pcr_pid)
+//{
+//	if ((p_ts_packet[0] == 0x47) &&
+//		(p_ts_packet[3] & 0x20) &&
+//		(p_ts_packet[5] & 0x10) &&
+//		(p_ts_packet[4] >= 7))
+//	{
+//		*p_pcr_pid = ((INT)p_ts_packet[1] & 0x1F) << 8 | p_ts_packet[2];
+//
+//		*p_pcr = ((INT64)p_ts_packet[6] << 25) |
+//			((INT64)p_ts_packet[7] << 17) |
+//			((INT64)p_ts_packet[8] << 9) |
+//			((INT64)p_ts_packet[9] << 1) |
+//			((INT64)p_ts_packet[10] >> 7);
+//		return TRUE;
+//	}
+//
+//	return FALSE;
+//}
+
+#define SLEEP_COUNT_TEST 250
+//boost::lockfree::queue<TSSENDCONTENT, boost::lockfree::fixed_sized<false>> ts_send_content_queue_(30000);
+boost::lockfree::spsc_queue<TSSENDCONTENT, boost::lockfree::fixed_sized<false>> ts_send_content_queue_(30000);
+//boost::lockfree::queue<TSPACKETCONTENT, boost::lockfree::fixed_sized<false>> ts_packet_queue(30000);
+
 void test_queue()
 {
 	TS_SEND_CONTENT me1;
@@ -54,12 +78,13 @@ void test_queue()
 void read_ts_func()
 {
 	fstream ss;
-	ss.open("20161017T142630.ts", ios::in | ios::binary);
-	FILE* fd = fopen("20161017T142630.ts", "rb");
+	ss.open("20161107T100344.ts", ios::in | ios::binary);
+	FILE* fd = fopen("20161107T100344.ts", "rb");
 	if (!fd)
 	{
 		assert(false);
 	}
+	std::cout << "come herer" << std::endl;
 	char ts_send_buffer[188];
 	long int pcr_duration_packet_num_ =0;
 	long int ts_packet_num_ = 0;
@@ -83,17 +108,14 @@ void read_ts_func()
 			CTsPacket ts_packet_;
 			if (ts_packet_.SetPacket((BYTE*)ts_send_buffer))
 			{
-
 				PCR packet_pcr = ts_packet_.Get_PCR();
-				WORD pid = ts_packet_.Get_PID();
-				//stream_buffer_.pushToBuffer(ts_data.content, ts_data.real_size);
+				//WORD pid = ts_packet.Get_PID();
 				int result = sender_buffer_.push_to_buffer(ts_send_buffer, 188);
 				if (E_OK != result)
 				{
-					vvlog_e("push to sender buff fail, error:" << result);
+					vvlog_e("push ts data to sender buff fail, error:" << result);
 				}
 				ts_packet_num_++;
-				//pcr_duration_packet_num_++;
 				if (INVALID_PCR != packet_pcr)
 				{
 					if (!is_first_pcr_)//
@@ -114,52 +136,16 @@ void read_ts_func()
 						pcr_second_packet_num = ts_packet_num_;
 						pcr_duration_packet_num_ = pcr_second_packet_num - pcr_first_packet_num;
 						long int system_clock_reference = 27;
-						double tranlate_rate_ = (double)(8*pcr_duration_packet_num_*188*27) / (pcr_end_ - pcr_front_);
-						double tranlate_interval_time_ = (double)(188*7 *8)/(long)(1000*tranlate_rate_);//发送188*7需要的时间
-						long int tmp_data_len = sender_buffer_.get_data_length();
-						char *tmp_data = sender_buffer_.get_data();
+						double tranlate_rate = (double)(8 * pcr_duration_packet_num_*TS_PACKET_LENGTH_STANDARD*system_clock_reference) / (pcr_end_ - pcr_front_);
+						double tranlate_interval_time = (double)(TS_PACKET_LENGTH_STANDARD * 7 * 8*1000) / (long)(tranlate_rate);//发送188*7需要的时间 micro
+						//vvlog_i("url:" << play_stream_ << "tsNum:" << pcr_duration_packet_num << "first_pcr:" << pcr_front << "pcr_end:" << pcr_end\
+							<< "rate:" << tranlate_rate_byte_micro << "time:" << tranlate_interval_time);
 						pcr_first_packet_num = pcr_second_packet_num = ts_packet_num_ = 0;
-						while (188*7 < tmp_data_len)
-						{
-							TS_SEND_CONTENT send_content;
-							memcpy(send_content.content, tmp_data, 188 * 7);
-							send_content.real_size = 188 * 7;
-							send_content.need_time = tranlate_interval_time_;
-							all_queue_size++;
-							
-							if (!ts_send_content_queue_.push(send_content))
-							{
-								std::cout << "push queue fail." << std::endl;
-							}
-							else
-							{
-								this_thread::sleep_for(std::chrono::microseconds(1));
-							}
-							tmp_data += 188*7;
-							tmp_data_len -= (188*7);
-						}
-						if (0 < tmp_data_len && tmp_data)
-						{
-							TS_SEND_CONTENT send_content_second;
-							memcpy(send_content_second.content, tmp_data, tmp_data_len);
-							send_content_second.real_size = tmp_data_len;
-							int send_time = (tranlate_interval_time_*tmp_data_len / (188*7))*1000;
-							send_content_second.need_time = send_time*1000;
-							all_queue_size++;
-							if (!ts_send_content_queue_.push(send_content_second))
-							{
-								std::cout << "push queue fail 2." << std::endl;
-							}
-							else
-							{
-								this_thread::sleep_for(std::chrono::microseconds(1));
-							}
-							
-							//client->write_ext(tmp_data, 188 * 7, send_time, "244.1.1.1", 65002);
-						}
+						//_push_ts_data_to_send_queue(sender_buffer.get_data(), sender_buffer.get_data_length(), tranlate_interval_time);
 						sender_buffer_.reset_buffer();
 					}
 				}
+
 			}
 			else
 			{
@@ -181,24 +167,74 @@ void read_ts_func()
 void test_udp_client(const string &addr, const int &port)
 {
 	UDPClientPtr client = make_shared<UDPClient>(0,5000,"224.1.1.1", 65002);
-
+	client->resize_send_buffer_size(1024 * 1024 * 1.25);
+	//client->connect();
+	client->set_reuse(true);
+	client->set_debug(true);
 	std::shared_ptr<std::thread> read_thread_ptr = nullptr;
 	read_thread_ptr.reset(new std::thread(std::bind(read_ts_func)));
 	read_thread_ptr->detach();
 	//client->connect();
+	//client->resize_send_buffer_size(0);
+	std::thread task_thread([&]() {
+	TS_SEND_CONTENT ts_content;
+	TSPACKETCONTENT ts_data;
+
+	char send_data[188 * 7] = { 0 };
+	int send_index = 0;
+	int64_t start_time = 0;
+	PCR first_pcr = 0;
+	int64_t cur_time = 0;
+	PCR cur_pcr = 0;
+	int64_t success_time = 0;
+	bool is_first = false;
+	long int sleep_time = 0;
+	DWORD cur_time_d = 0;
+	DWORD start_time_d = 0;
+	int sleep_cout = SLEEP_COUNT_TEST;
+	int64_t all_run_time = 0;
+	int64_t all_need_time = 0;
+	bool is_first_send = false;
 	while (1)
 	{
-		TS_SEND_CONTENT ts_content;
-		while (ts_send_content_queue_.pop(ts_content))
+
+		while(ts_send_content_queue_.pop(ts_content))
 		{
-			//client->write(ts_content.content, ts_content.real_size, ts_content.need_time);
-			int64_t success_time;
-			client->write_ext(ts_content.content\
+			start_time = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+			int result = client->write_ext(ts_content.content\
 				, ts_content.real_size\
 				, ts_content.need_time\
 				, "224.1.1.1"\
-				, 65002, &success_time);
+				, 65002);
+			if (result == E_OK)
+			{
+				success_time = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+				int64_t run_time_count = success_time - start_time;
+				all_run_time += run_time_count;
+				all_need_time += ts_content.need_time;
+				sleep_cout -= 1;
+				if (0 == sleep_cout)
+				{
+					if (all_need_time > all_run_time)
+					{
+						int64_t sleep_time = int64_t((all_need_time-all_run_time));
+						this_thread::sleep_for(std::chrono::nanoseconds((long)(sleep_time)));
+					}
+					sleep_cout = SLEEP_COUNT_TEST;
+					all_run_time = 0;
+					all_need_time = 0;
+				}
+			}
+			else
+			{
+				std::cout << "send faile" << std::endl;
+			}
 		}
-		this_thread::sleep_for(std::chrono::microseconds(1));
+		//this_thread::sleep_for(std::chrono::nanoseconds(1));
+	}
+	});
+	while (true)
+	{
+		this_thread::sleep_for(std::chrono::seconds(5));
 	}
 }

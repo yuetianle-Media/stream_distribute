@@ -37,10 +37,10 @@ int main(int argc, char **argv)
 	//test_http_curl_client();
 
 	//const string stream_uri = "http://10.160.34.115:91/119/119.m3u8";
-	//const string cctv_6_h265 = "http://10.160.34.115:91/120/120.m3u8";
-	//const string found_uri = "http://58.20.59.58:8020/live/fazhilv.stream_aac/playlist.m3u8";
-	//test_stream_receive(found_uri);
-	//test_stream_receive(cctv_6_h265);
+	////const string cctv_6_h265 = "http://10.160.34.115:91/120/120.m3u8";
+	////const string found_uri = "http://58.20.59.58:8020/live/fazhilv.stream_aac/playlist.m3u8";
+	////test_stream_receive(found_uri);
+	//test_stream_receive(stream_uri);
 	//while (true)
 	//{
 	//	this_thread::sleep_for(std::chrono::seconds(5));
@@ -57,11 +57,15 @@ int main(int argc, char **argv)
 	//}
 
 
+#ifdef WIN32
 	//test_udp_client("224.0.2.100", 9000);
 	//while (true)
 	//{
 	//	this_thread::sleep_for(std::chrono::seconds(5));
 	//}
+#endif
+	
+	//test_async_task();
 
 	test_stream_manager("rules.xml");
 

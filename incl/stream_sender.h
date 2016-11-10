@@ -23,6 +23,7 @@ typedef struct IPPORTV
 //#define TEST 1
 
 #define ENABLE_OUTFILE 0
+#define SLEEP_COUNT 30
 class StreamSender :public std::enable_shared_from_this<StreamSender>
 {
 public:

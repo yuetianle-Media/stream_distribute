@@ -90,7 +90,7 @@ void StreamManager::_do_add_tasks_callback()
 				}
 				this_thread::sleep_for(std::chrono::seconds(1));
 			}
-			this_thread::sleep_for(chrono::milliseconds(1));
+			this_thread::sleep_for(chrono::seconds(5));
 			if (is_exit_)
 			{
 				break;
@@ -128,7 +128,7 @@ void StreamManager::_do_del_tasks_callback()
 						<< "address:" << multi_addr);
 				}
 			}
-			this_thread::sleep_for(chrono::milliseconds(1));
+			this_thread::sleep_for(chrono::seconds(5));
 			if (is_exit_)
 			{
 				break;
@@ -156,10 +156,14 @@ bool StreamManager::_do_add_task(const TASKCONTENT &task_content, const std::str
 		{
 			//sender_ptr = make_shared<StreamSender>();
 			
-			sender_ptr = make_shared<StreamSender>(receiver_ptr);
 			if (!local_addr.empty())
 			{
+				sender_ptr = make_shared<StreamSender>(receiver_ptr, local_addr);
 				sender_ptr->set_local_ip(local_addr);
+			}
+			else
+			{
+				sender_ptr = make_shared<StreamSender>(receiver_ptr);
 			}
 			sender_ptr->set_delay_time(task_content.delay_time_ms);
 			sender_ptr->set_receive_url(task_content.url);
@@ -172,10 +176,13 @@ bool StreamManager::_do_add_task(const TASKCONTENT &task_content, const std::str
 					, task_content.remote_addr_list[index].port);
 				stream_content.multi_addr.insert(std::make_pair(ip_port_id, task_content.remote_addr_list[index]));
 			}
+
 			if (receiver_ptr)
 				receiver_ptr->start();
 			if (sender_ptr)
 				sender_ptr->start();
+			//std::async(std::launch::async, [&]() {
+			//});
 			if (receiver_ptr && sender_ptr)
 			{
 				stream_content.sender = sender_ptr;

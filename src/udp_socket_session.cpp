@@ -35,6 +35,86 @@ UDPSocketSession::~UDPSocketSession()
 
 }
 
+
+bool UDPSocketSession::resize_send_buffer_size(const long int &send_size)
+{
+	boost::system::error_code ec;
+	boost::asio::ip::tcp::socket::send_buffer_size bz(0);
+	udp_socket_.get_option(bz, ec);
+	if (!ec)
+	{
+		udp_socket_.set_option(boost::asio::ip::tcp::socket::send_buffer_size(send_size), ec);
+		if (!ec)
+		{
+			udp_socket_.get_option(bz, ec);
+			return true;
+		}
+	}
+	return false;
+
+}
+
+
+bool UDPSocketSession::resize_receive_buffer_size(const long int &receive_size)
+{
+	return true;
+}
+
+
+bool UDPSocketSession::set_reuse(const bool &is_reuse)
+{
+	boost::asio::socket_base::reuse_address reuse(is_reuse);
+	boost::system::error_code ec;
+	udp_socket_.get_option(reuse, ec);
+	if (!ec)
+	{
+		reuse = is_reuse;
+		udp_socket_.set_option(reuse, ec);
+		if (!ec)
+		{
+			udp_socket_.get_option(reuse, ec);
+			return E_OK;
+		}
+	}
+	return E_PARAM_ERROR;
+}
+
+
+bool UDPSocketSession::set_debug(const bool &is_debug)
+{
+	boost::asio::socket_base::debug option(is_debug);
+	boost::system::error_code ec;
+	udp_socket_.get_option(option, ec);
+	if (!ec)
+	{
+		option = is_debug;
+		udp_socket_.set_option(option, ec);
+		if (!ec)
+		{
+			udp_socket_.get_option(option, ec);
+			return E_OK;
+		}
+	}
+}
+
+
+bool UDPSocketSession::set_noblock(const bool &is_block)
+{
+
+	boost::system::error_code ec;
+	bool blocking = udp_socket_.non_blocking();
+	if (blocking != is_block)
+	{
+		udp_socket_.non_blocking(is_block, ec);
+		if (!ec)
+		{
+			blocking = udp_socket_.non_blocking();
+			return true;
+		}
+	}
+	return false;
+}
+
 int UDPSocketSession::_close()
 {
 	boost::system::error_code ec;

@@ -7,6 +7,9 @@ StreamSender::StreamSender()
 {
     out_file_name_.append(boost::posix_time::to_iso_string(boost::posix_time::second_clock::local_time())).append(".ts");
 	udp_sender_ptr = std::make_shared<UDPClient>(0, 5000);
+	udp_sender_ptr->resize_send_buffer_size(1024 * 1024 * 1.25);
+	udp_sender_ptr->set_reuse(true);
+	udp_sender_ptr->set_noblock(true);
 #if ENABLE_OUTFILE
 	out_ts_file_ = fopen(out_file_name_.data(), "ab");
 #endif
@@ -28,6 +31,9 @@ StreamSender::StreamSender(StreamReceiverPtr receiver, const std::string &local_
 	{
 		udp_sender_ptr = std::make_shared<UDPClient>(0, 5000,local_ip_);
 	}
+	udp_sender_ptr->resize_send_buffer_size(1024 * 1024 * 1.25);
+	udp_sender_ptr->set_reuse(true);
+	udp_sender_ptr->set_noblock(true);
 #if ENABLE_OUTFILE
 	out_ts_file_ = fopen(out_file_name_.data(), "ab");
 #endif
@@ -54,6 +60,7 @@ int StreamSender::start()
 		send_task_thrd_.reset(new thread(std::bind(&StreamSender::_do_send_task_ext, this)));
 		if (send_task_thrd_)
 		{
+			send_task_thrd_->detach();
 			vvlog_i("start send task success.");
 			return E_OK;
 		}
@@ -134,71 +141,54 @@ void StreamSender::_do_send_task_ext()
 	//TSSendQueueType *ts_data_queue = nullptr;
 	TSSendSpscQueueType *ts_data_queue = nullptr;
 	stream_receiver_->get_send_queue(ts_data_queue);
+	bool is_first_send = false;
 	TS_SEND_CONTENT ts_send_content;
 	int64_t success_time = 0;
 	int64_t last_sleep_time = 0;
+	int64_t run_time_count = 0;
+	int64_t sleep_time = 0;
+
+	long int sleep_packet_count = SLEEP_COUNT;//可以使用随机数
+	int64_t all_run_time = 0;
+	int64_t all_need_time = 0;
+	int64_t cur_time_count = 0;
+	int64_t send_start_time = 0;
 	while (1)
 	{
 		if (is_ts_task_exit_)
 		{
 			break;
 		}
-		if (stream_receiver_ && ts_data_queue)
+		while (ts_data_queue && ts_data_queue->pop(ts_send_content))
 		{
-			//int send_count = ts_data_queue->consume_all([&](TS_SEND_CONTENT &ts_data_item)
-			//{
-			//	v_lock(lk, multicast_mtx_);
-
-			//	int64_t cur_time_count = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-			//	int64_t run_time_count = cur_time_count - success_time;
-			//	if (0 < success_time && 0 < run_time_count &&run_time_count < last_sleep_time)
-			//	{
-			//		//std::cout << "runtime:" << run_time_count << "sleeptime:" << last_sleep_time << std::endl;
-			//		this_thread::sleep_for(std::chrono::microseconds(last_sleep_time - run_time_count));
-			//	}
-			//	else
-			//	{
-			//		std::cout << "out time" << std::endl;
-			//	}
-			//	for (auto item : multicast_list_)
-			//	{
-			//		udp_sender_ptr->write_ext(ts_data_item.content\
-			//			, ts_data_item.real_size\
-			//			, ts_data_item.need_time\
-			//			, item.second.ip\
-			//			, item.second.port, &success_time);
-			//		last_sleep_time = ts_data_item.need_time;
-			//	}
-			//});
-			//if (0 < send_count)
-			//{
-			//	vvlog_i("send multi udp cnt:" << send_count << "url:" << receive_url_);
-			//}
-			while (ts_data_queue->pop(ts_send_content))
+			//send_start_time = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+			//send_start_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+			send_start_time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+			for (auto item : multicast_list_)
 			{
-				//std::call_once(delay_flag_, [&]() 
-				//{
-				//	this_thread::sleep_for(std::chrono::milliseconds(send_delay_time_));
-				//});
-				v_lock(lk, multicast_mtx_);
-				int64_t cur_time_count = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-				for (auto item : multicast_list_)
+				udp_sender_ptr->write_ext(ts_send_content.content\
+					, ts_send_content.real_size\
+					, ts_send_content.need_time\
+					, item.second.ip\
+					, item.second.port);
+			}
+			all_need_time += ts_send_content.need_time;
+			//success_time = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+			//success_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+			success_time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+			all_run_time += (success_time - send_start_time);
+			sleep_packet_count--;
+			if (0 == sleep_packet_count)
+			{
+				if (all_need_time > all_run_time)
 				{
-					//std::cout << "multi send size:" << ts_send_content.real_size\
-						<< "time:" << ts_send_content.need_time << std::endl;
-					udp_sender_ptr->write_ext(ts_send_content.content\
-						, ts_send_content.real_size\
-						, ts_send_content.need_time\
-						, item.second.ip\
-						, item.second.port, &success_time);
+					//this_thread::sleep_for(std::chrono::nanoseconds(all_need_time - all_run_time));
+					//this_thread::sleep_for(std::chrono::milliseconds(all_need_time - all_run_time));
+					this_thread::sleep_for(std::chrono::microseconds(all_need_time - all_run_time));
 				}
-				success_time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-				int64_t run_time_count = cur_time_count - success_time;
-				if (0 < run_time_count && run_time_count < ts_send_content.need_time)
-				{
-					this_thread::sleep_for(std::chrono::microseconds((long)(ts_send_content.need_time-run_time_count)));
-				}
-				memset(&ts_send_content, 0, sizeof(ts_send_content));
+				sleep_packet_count = SLEEP_COUNT;
+				all_run_time = 0;
+				all_need_time = 0;
 			}
 		}
 		this_thread::sleep_for(std::chrono::nanoseconds(1));

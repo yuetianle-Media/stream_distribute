@@ -25,6 +25,11 @@ public:
 
 	boost::asio::ip::udp::socket& socket() { return udp_socket_; }
 	boost::asio::io_service::strand& strand() { return strand_; }
+	bool resize_send_buffer_size(const long int &send_size);
+	bool resize_receive_buffer_size(const long int &receive_size);
+	bool set_reuse(const bool &is_reuse);
+	bool set_debug(const bool &is_debug);
+	bool set_noblock(const bool &is_block);
 protected:
 	int local_port_;
 	int time_out_ms_;
