@@ -299,6 +299,7 @@ void RuleManager::_do_task()
 
 void RuleManager::_do_task_ext()
 {
+	std::cout << "rule manager task pid:" << this_thread::get_id() << std::endl;
 	while (1)
 	{
 		if (b_exit_)

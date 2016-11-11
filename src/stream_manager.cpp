@@ -53,6 +53,7 @@ void StreamManager::_do_add_tasks_callback()
 {
 	if (rules_manager_)
 	{
+		std::cout << "add tasks pid:" << this_thread::get_id() << std::endl;
 		while (1)
 		{
 			TASKCONTENT task_content;
@@ -103,6 +104,7 @@ void StreamManager::_do_del_tasks_callback()
 {
 	if (rules_manager_)
 	{
+		std::cout << "del tasks callback pid:" << this_thread::get_id() << std::endl;
 		while (1)
 		{
 			TASKCONTENT task_content;
@@ -140,6 +142,7 @@ void StreamManager::_do_del_tasks_callback()
 
 bool StreamManager::_do_add_task(const TASKCONTENT &task_content, const std::string &local_addr)
 {
+	//return true;
 	StreamReceiverPtr receiver_ptr = nullptr;
 	StreamSenderPtr sender_ptr = nullptr;
 	StreamContent stream_content;

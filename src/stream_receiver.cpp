@@ -4,11 +4,11 @@
 
 
 StreamReceiver::StreamReceiver(const string &url)
-	:ts_task_list_(1000), uri_parser_(url), play_stream_duration_(5)\
+	:ts_task_list_(5000), uri_parser_(url), play_stream_duration_(5)\
 	, m3u8_thrd_ptr_(nullptr), ts_thrd_ptr_(nullptr), parse_ts_thrd_(nullptr)\
 	, b_exit_m3u8_task_(false), b_exit_ts_task_(false), b_exit_parse_task_(false)\
 	, ts_file_index_(0), uri_(url), receive_ts_buffer_(TS_PACKET_LENGTH_STANDARD*7*400)\
-	, /*ts_packet_queue_(32780), ts_send_content_queue_(28000),*/ play_stream_count_(0)
+	, ts_send_unmlimt_queue_(1024*50), play_stream_count_(0)
 {
 	play_stream_ = uri_;
 	ostringstream ss_out;
@@ -66,7 +66,8 @@ int StreamReceiver::start()
 	}
 	m3u8_thrd_ptr_.reset(new std::thread(std::bind(&StreamReceiver::_do_m3u8_task, this)));
 	ts_thrd_ptr_.reset(new std::thread(std::bind(&StreamReceiver::_do_ts_task, this)));
-	parse_ts_thrd_.reset(new thread(std::bind(&StreamReceiver::_do_parse_ts_data, this)));
+	//parse_ts_thrd_.reset(new thread(std::bind(&StreamReceiver::_do_parse_ts_data, this)));
+	parse_ts_thrd_.reset(new thread(std::bind(&StreamReceiver::_do_parse_ts_data_ext, this)));
 	if (m3u8_thrd_ptr_ && ts_thrd_ptr_ && parse_ts_thrd_)
 	{
 		m3u8_thrd_ptr_->detach();
@@ -224,7 +225,7 @@ int StreamReceiver::_send_ts_cmd(const string &ts_cmd)
 	int result = E_OK;
     if (nullptr != ts_http_client_ptr_)
     {
-		//vvlog_i("send ts cmd:" << ts_cmd << "start.");
+		//vvlog_i("send ts cmd:" << ts_cmd << "start pid:" << this_thread::get_id());
 		//auto ret = std::async(std::launch::async, [&]() {
 
 		//	result = ts_http_client_ptr_->get(ts_cmd);
@@ -234,7 +235,7 @@ int StreamReceiver::_send_ts_cmd(const string &ts_cmd)
 		result = ts_http_client_ptr_->get(ts_cmd);
 		if (E_OK != result)
 		{
-			//vvlog_e("send ts cmd : " << ts_cmd << " fail!");
+			vvlog_e("send ts cmd : " << ts_cmd << " fail!");
 			//std::cout << "send ts cmd:" << ts_cmd << " fail!" << std::endl;
 		}
 		else
@@ -296,7 +297,10 @@ int StreamReceiver::_push_ts_cmd_to_queue(const string &ts_cmd_str)
 		boost::posix_time::ptime now = boost::posix_time::second_clock::local_time();
 		std::string cur_time = boost::posix_time::to_iso_string(now);
 		ts_all_task_map_.insert(std::make_pair(ts_cmd_str, cur_time));
-		ts_task_list_.push(ts_cmd);
+		if (!ts_task_list_.push(ts_cmd))
+		{
+			vvlog_e("push ts task faile tscmd:" << ts_cmd_str);
+		}
 	}
 	return 0;
 }
@@ -307,7 +311,7 @@ void StreamReceiver::m3u8Callback(char *data, const long int &data_len, const bo
 	m3u8_content_.append(data, data_len);
 	if (is_finished)
 	{
-		m3u8_content_.append(data, data_len);
+		//m3u8_content_.append(data, data_len);
 		M3u8Parser parser(play_stream_, m3u8_content_);
 		if (parser.is_variant_play_list())//多个视频流
 		{
@@ -396,6 +400,7 @@ void StreamReceiver::tsCallback(char *data, const long int &data_len, const bool
 				one_ts_data.real_size = TS_PACKET_LENGTH_STANDARD;
 				while(!ts_spsc_packet_queue.push(one_ts_data))
 				{
+					//this_thread::yield();
 					this_thread::sleep_for(std::chrono::nanoseconds(1));
 					if (b_exit_ts_task_)
 					{
@@ -420,6 +425,7 @@ void StreamReceiver::tsCallback(char *data, const long int &data_len, const bool
 
 int StreamReceiver::_do_m3u8_task()
 {
+	std::cout << "m3u8Task pid:" << this_thread::get_id() << std::endl;
     while (1) {
 		if (0 < play_stream_.length())
 		{
@@ -429,10 +435,14 @@ int StreamReceiver::_do_m3u8_task()
 			{
 				m3u8_conn_ = m3u8_http_client_ptr_->subscribe_data(boost::bind(&StreamReceiver::m3u8Callback, this, _1, _2, _3));
 			}
-			if (0 < play_stream_count_)
+			if (0 < play_stream_count_ && 0 < play_stream_list_.size())
 			{
-				play_stream_ = play_stream_list_.at(0);
+				play_stream_ = play_stream_list_.at(play_stream_count_-1);
 			}
+		}
+		else
+		{
+			this_thread::sleep_for(std::chrono::nanoseconds(1));
 		}
         if (b_exit_m3u8_task_)
         {
@@ -505,19 +515,20 @@ int StreamReceiver::_do_m3u8_task_group(const string & play_stream, const long i
 
 int StreamReceiver::_do_ts_task()
 {
+	std::cout << "one ts task pid:" << this_thread::get_id() << std::endl;
     while (1) {
 		HTTPTSCMD ts_cmd_struct;
 		while (ts_task_list_.pop(ts_cmd_struct))
 		{
+			if (b_exit_ts_task_)
+			{
+				break;
+			}
 			_send_ts_cmd(ts_cmd_struct.cmd);
 			if (!ts_conn_.connected())
 			{
 				ts_conn_ = ts_http_client_ptr_->subscribe_data(boost::bind(&StreamReceiver::tsCallback, this, _1, _2, _3));
 			}
-		}
-		if (b_exit_ts_task_)
-		{
-			break;
 		}
         std::this_thread::sleep_for(std::chrono::nanoseconds(1));
     }
@@ -613,6 +624,7 @@ void StreamReceiver::_do_parse_ts_data()
 	long int pcr_end = 0;
 	long int max_pcr = 0;
 	bool is_find_first_pcr = false;
+	std::cout << "parse ts task:" << this_thread::get_id() <<std::endl;
 	while (1)
 	{
 		if (b_exit_parse_task_)
@@ -682,8 +694,80 @@ void StreamReceiver::_do_parse_ts_data()
 			memset(&ts_data, 0, sizeof(ts_data));
 		}
 		//memset(&ts_data, 0, sizeof(ts_data));
+		this_thread::yield();
+		//this_thread::sleep_for(std::chrono::microseconds(1));
+	}
+
+}
+
+void StreamReceiver::_do_parse_ts_data_ext()
+{
+	StreamSenderBuffer sender_buffer;
+	CTsPacket ts_packet;
+	TS_PACKET_CONTENT ts_data;
+	long int ts_packet_num = 0;
+
+	long int pcr_first_packet_num = 0;//找到第一包PCR收到的数据包
+	long int pcr_second_packet_num = 0;//找到第二包PCR收到的数据包
+	long int pcr_duration_packet_num = 0;
+	long int pcr_front = 0;
+	long int pcr_end = 0;
+	long int max_pcr = 0;
+	bool is_find_first_pcr = false;
+	std::cout << "parse ts task:" << this_thread::get_id() <<std::endl;
+	int push_count = 0;
+	while (1)
+	{
+		if (b_exit_parse_task_)
+		{
+			break;
+		}
+		while (ts_spsc_packet_queue.pop(ts_data))
+		{
+			if (ts_data.real_size < TS_PACKET_LENGTH_STANDARD)
+			{
+				vvlog_e("ts not complete packet");
+			}
+			if (!ts_data.content || ts_data.content[0] != 0x47)
+			{
+				assert(false);
+			}
+			if (ts_packet.SetPacket((BYTE*)ts_data.content))
+			{
+				PCR packet_pcr = ts_packet.Get_PCR();
+				//WORD pid = ts_packet.Get_PID();
+				int result = sender_buffer.push_to_buffer(ts_data.content, ts_data.real_size);
+				ts_packet_num++;
+				if (INVALID_PCR != packet_pcr ||ts_packet_num == 7)
+				{
+					TSSENDCONTENT ts_send_content;
+					memcpy(ts_send_content.content, ts_data.content, ts_data.real_size);
+					ts_send_content.real_size = ts_data.real_size;
+					if (packet_pcr != INVALID_PCR)
+					{
+						ts_send_content.cur_pcr = packet_pcr;
+						ts_send_content.is_real_pcr = true;
+					}
+					//std::cout << "push ts" << std::endl;
+					ts_send_unmlimt_queue_.push(ts_send_content);
+					ts_packet_num = 0;
+					sender_buffer.reset_buffer();
+				}
+			}
+			else
+			{
+				//if (out_ts_file_)
+				//{
+				//	fwrite(ts_data.content, 1, ts_data.real_size, out_ts_file_);
+				//}
+				std::cout << "invaild packet, url:" << std::endl;
+				//vvlog_e("it is a invalid packet!! receiverurl:"<<receive_url_ << "len:" << ts_data.real_size);
+			}
+		}
+		//this_thread::yield();
 		this_thread::sleep_for(std::chrono::microseconds(1));
 	}
+
 
 }
 
@@ -701,15 +785,27 @@ void StreamReceiver::_push_ts_data_to_send_queue(char *data, const long int &dat
 		{
 			ts_send_content.is_real_pcr = true;
 		}
-		while (!ts_send_spsc_queue_.push(ts_send_content))
-		{
-			if (b_exit_parse_task_)
+		try {
+			//if (!ts_send_unmlimt_queue_.bounded_push(ts_send_content))
+			if (!ts_send_unmlimt_queue_.push(ts_send_content))
 			{
-				break;
+				std::cout << "push send content fail" << std::endl;
 			}
-			this_thread::sleep_for(std::chrono::microseconds(1));
-			//vvlog_e("push ts send content to queue faile, url:"<< play_stream_);
 		}
+		catch (std::exception e)
+		{
+			std::cout << "errmsg:" << e.what() << std::endl;
+		}
+		//while (!ts_send_spsc_queue_.push(ts_send_content))
+		//{
+		//	if (b_exit_parse_task_)
+		//	{
+		//		break;
+		//	}
+		//	this_thread::yield();
+		//	//this_thread::sleep_for(std::chrono::microseconds(1));
+		//	//vvlog_e("push ts send content to queue faile, url:"<< play_stream_);
+		//}
 		tmp_data_len -=TS_SEND_SIZE;
 		tmp_data = tmp_data + TS_SEND_SIZE;
 		memset(&ts_send_content, 0, sizeof(ts_send_content));
@@ -720,15 +816,28 @@ void StreamReceiver::_push_ts_data_to_send_queue(char *data, const long int &dat
 		ts_send_content.need_time = (tmp_data_len*need_time) / (TS_SEND_SIZE);
 		ts_send_content.real_size = tmp_data_len;
 		ts_send_content.is_real_pcr = true;
-		while (!ts_send_spsc_queue_.push(ts_send_content))
+		try
 		{
-			if (b_exit_parse_task_)
+			//if (!ts_send_unmlimt_queue_.bounded_push(ts_send_content))
+			if (!ts_send_unmlimt_queue_.push(ts_send_content))
 			{
-				break;
+				std::cout << "push send content fail" << std::endl;
 			}
-			this_thread::sleep_for(std::chrono::microseconds(1));
-			//vvlog_e("push ts send content to queue fail, url:" << play_stream_);
 		}
+		catch (std::exception e)
+		{
+			std::cout << "errmsg:" << e.what() << std::endl;
+		}
+		//while (!ts_send_spsc_queue_.push(ts_send_content))
+		//{
+		//	if (b_exit_parse_task_)
+		//	{
+		//		break;
+		//	}
+		//	this_thread::yield();
+		//	//this_thread::sleep_for(std::chrono::microseconds(1));
+		//	//vvlog_e("push ts send content to queue fail, url:" << play_stream_);
+		//}
 		memset(&ts_send_content, 0, sizeof(ts_send_content));
 	}
 }

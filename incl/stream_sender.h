@@ -44,6 +44,8 @@ private:
 
 	void _write_content_to_file(const string &file_name, const char* data, const int &length);
 
+	void _do_send_task();
+
 	void _do_send_task_ext();
 
 	UDPClientPtr udp_sender_ptr;

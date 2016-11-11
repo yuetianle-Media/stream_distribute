@@ -57,7 +57,8 @@ int StreamSender::start()
 	}
 	else
 	{
-		send_task_thrd_.reset(new thread(std::bind(&StreamSender::_do_send_task_ext, this)));
+		//send_task_thrd_.reset(new thread(std::bind(&StreamSender::_do_send_task_ext, this)));
+		send_task_thrd_.reset(new thread(std::bind(&StreamSender::_do_send_task, this)));
 		if (send_task_thrd_)
 		{
 			send_task_thrd_->detach();
@@ -139,8 +140,14 @@ void StreamSender::set_receive_url(const string &url)
 void StreamSender::_do_send_task_ext()
 {
 	//TSSendQueueType *ts_data_queue = nullptr;
-	TSSendSpscQueueType *ts_data_queue = nullptr;
-	stream_receiver_->get_send_queue(ts_data_queue);
+	//TSSendSpscQueueType *ts_data_queue = nullptr;
+	//stream_receiver_->get_send_queue(ts_data_queue);
+
+	TSSendUnlimitQueueType *ts_data_queue = nullptr;
+	if (stream_receiver_)
+	{
+		stream_receiver_->get_unlimit_queue(ts_data_queue);
+	}
 	bool is_first_send = false;
 	TS_SEND_CONTENT ts_send_content;
 	int64_t success_time = 0;
@@ -153,6 +160,7 @@ void StreamSender::_do_send_task_ext()
 	int64_t all_need_time = 0;
 	int64_t cur_time_count = 0;
 	int64_t send_start_time = 0;
+	std::cout << "send ts task pid:" << this_thread::get_id() << std::endl;
 	while (1)
 	{
 		if (is_ts_task_exit_)
@@ -191,6 +199,7 @@ void StreamSender::_do_send_task_ext()
 				all_need_time = 0;
 			}
 		}
+		//this_thread::yield();
 		this_thread::sleep_for(std::chrono::nanoseconds(1));
 	}
 }
@@ -238,6 +247,84 @@ void StreamSender::_write_content_to_file(const string &file_name, const char* d
 	else
 	{
 		std::cout << "open file bad " << std::endl;
+	}
+
+}
+
+void StreamSender::_do_send_task()
+{
+	TSSendUnlimitQueueType *ts_data_queue = nullptr;
+	if (stream_receiver_)
+	{
+		stream_receiver_->get_unlimit_queue(ts_data_queue);
+	}
+	bool is_first_send = false;
+	TS_SEND_CONTENT ts_send_content;
+	int64_t success_time = 0;
+	int64_t last_sleep_time = 0;
+	int64_t run_time_count = 0;
+	int64_t sleep_time = 0;
+
+	long int sleep_packet_count = SLEEP_COUNT;//可以使用随机数
+	int64_t all_run_time = 0;
+	int64_t all_need_time = 0;
+	int64_t cur_time_count = 0;
+	int64_t send_start_time = 0;
+	std::cout << "send ts task pid:" << this_thread::get_id() << std::endl;
+
+	int64_t start_time = 0;
+	int64_t cur_time = 0;
+	PCR cur_pcr = 0;
+	PCR first_pcr = 0;
+	bool is_first = false;
+	while (1)
+	{
+		if (is_ts_task_exit_)
+		{
+			break;
+		}
+		PCR cur_cout = cur_pcr - first_pcr;
+		cur_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+		int64_t time_cout = cur_time - start_time;
+		if (time_cout < cur_cout / 27000)
+		//if (time_cout < cur_cout / 27000000)
+		{
+			this_thread::sleep_for(std::chrono::milliseconds(10));
+			continue;
+		}
+		if(ts_data_queue->pop(ts_send_content))
+		{
+			//std::cout << "pop success" << std::endl;
+			if (ts_send_content.is_real_pcr && !is_first)
+			{
+				start_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+				cur_pcr = ts_send_content.cur_pcr;
+				first_pcr = ts_send_content.cur_pcr;
+				is_first = true;
+			}
+			if (ts_send_content.is_real_pcr)
+			{
+				if ((ts_send_content.cur_pcr - cur_pcr) / 90 > 10000 || ts_send_content.cur_pcr < cur_pcr)
+				{
+					first_pcr = ts_send_content.cur_pcr;
+					start_time = cur_time;
+				}
+				cur_pcr = ts_send_content.cur_pcr;
+			}
+			for (auto item : multicast_list_)
+			{
+				udp_sender_ptr->write_ext(ts_send_content.content\
+					, ts_send_content.real_size\
+					, ts_send_content.need_time\
+					, item.second.ip\
+					, item.second.port);
+			}
+		}
+		else
+		{
+			std::cout << "pop fail" << std::endl;
+			this_thread::sleep_for(std::chrono::milliseconds(10));
+		}
 	}
 
 }

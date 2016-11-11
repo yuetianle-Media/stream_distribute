@@ -197,7 +197,7 @@ int HttpCurlClient::_parse_http_header(char* data, const long int &data_len)
 				}
 				else
 				{
-					vvlog_e("request error url:" << url_ << " http_header:" << http_header_);
+					//vvlog_e("request error url:" << url_ << " http_header:" << http_header_);
 				}
 			}
 		}
@@ -226,7 +226,7 @@ int HttpCurlClient::_receive_data(char *data, const long int &data_len)
 	}
 	else
 	{
-		vvlog_e("no signal or data fail, url:" << url_ << " data:" << data\
+		//vvlog_e("no signal or data fail, url:" << url_ << " data:" << data\
 			<< "dataLen:" << data_len);
 	}
 	return 0;
