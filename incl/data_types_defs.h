@@ -1,8 +1,8 @@
 #pragma once
-#include <boost/lockfree/queue.hpp>
-#include <boost/lockfree/spsc_queue.hpp>
-#include <stdio.h> 
-#include <string.h>
+
+#include "pre_boost_basic.h"
+#include "pre_std_basic.h"
+
 #include "dvb.h"
 #include "http_flags.h"
 #ifndef TS_SEND_SIZE

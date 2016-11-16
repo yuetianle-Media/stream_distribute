@@ -23,10 +23,10 @@ inline void test_stream_sender(const string &url, const string &multi_server, co
         //conn_list.insert(std::make_pair(test_count, sender_connect));
         receive_list.insert(std::make_pair(test_count, ptr));
         sender_list.insert(std::make_pair(test_count, ptr_send));
-		this_thread::sleep_for(std::chrono::seconds(5));
+		//std::this_thread::sleep_for(std::chrono::seconds(5));
         test_count--;
     }
-	this_thread::sleep_for(std::chrono::seconds(60*3));
+	//std::this_thread::sleep_for(std::chrono::seconds(60*3));
 	for (int stream_index = stream_count; stream_index > 0; stream_index--)
 	{
 		receive_list.at(stream_index)->stop();

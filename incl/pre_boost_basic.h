@@ -15,5 +15,9 @@
 #include <boost/asio/use_future.hpp>
 #include <boost/coroutine/coroutine.hpp>
 #include <boost/asio/spawn.hpp>
+#include <boost/lockfree/queue.hpp>
+#include <boost/lockfree/spsc_queue.hpp>
+
+#include <boost/filesystem.hpp>
 //#include <boost/thread.hpp>
 //#include <boost/thread/mutex.hpp>

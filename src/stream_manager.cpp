@@ -25,6 +25,8 @@ bool StreamManager::start()
 	}
 	if (add_task_ && remove_task_)
 	{
+		add_task_->detach();
+		remove_task_->detach();
 		return true;
 	}
 	else
@@ -53,7 +55,9 @@ void StreamManager::_do_add_tasks_callback()
 {
 	if (rules_manager_)
 	{
-		std::cout << "add tasks pid:" << this_thread::get_id() << std::endl;
+		TASKTYPE *add_task_queue = nullptr;
+		rules_manager_->get_add_task_queue(add_task_queue);
+		std::cout << "add tasks pid:" << std::this_thread::get_id() << std::endl;
 		while (1)
 		{
 			TASKCONTENT task_content;
@@ -89,9 +93,10 @@ void StreamManager::_do_add_tasks_callback()
 						<< "multiaddress cout:" << task_content.addr_cout\
 						<< "address:" << multi_addr);
 				}
-				this_thread::sleep_for(std::chrono::seconds(1));
+				//Sleep(1000);
+				std::this_thread::sleep_for(std::chrono::seconds(1));
 			}
-			this_thread::sleep_for(chrono::seconds(5));
+			std::this_thread::sleep_for(std::chrono::seconds(5));
 			if (is_exit_)
 			{
 				break;
@@ -104,7 +109,7 @@ void StreamManager::_do_del_tasks_callback()
 {
 	if (rules_manager_)
 	{
-		std::cout << "del tasks callback pid:" << this_thread::get_id() << std::endl;
+		std::cout << "del tasks callback pid:" << std::this_thread::get_id() << std::endl;
 		while (1)
 		{
 			TASKCONTENT task_content;
@@ -130,7 +135,7 @@ void StreamManager::_do_del_tasks_callback()
 						<< "address:" << multi_addr);
 				}
 			}
-			this_thread::sleep_for(chrono::seconds(5));
+			std::this_thread::sleep_for(std::chrono::seconds(5));
 			if (is_exit_)
 			{
 				break;
@@ -154,19 +159,19 @@ bool StreamManager::_do_add_task(const TASKCONTENT &task_content, const std::str
 	StreamMap::iterator iter = stream_map_.find(task_content.url);
 	if (iter == stream_map_.end())//没有此视频流
 	{
-		receiver_ptr = make_shared<StreamReceiver>(task_content.url);
+		receiver_ptr = std::make_shared<StreamReceiver>(task_content.url);
 		if (0 < task_content.addr_cout)
 		{
-			//sender_ptr = make_shared<StreamSender>();
+			//sender_ptr = std::make_shared<StreamSender>();
 			
 			if (!local_addr.empty())
 			{
-				sender_ptr = make_shared<StreamSender>(receiver_ptr, local_addr);
+				sender_ptr = std::make_shared<StreamSender>(receiver_ptr, local_addr);
 				sender_ptr->set_local_ip(local_addr);
 			}
 			else
 			{
-				sender_ptr = make_shared<StreamSender>(receiver_ptr);
+				sender_ptr = std::make_shared<StreamSender>(receiver_ptr);
 			}
 			sender_ptr->set_delay_time(task_content.delay_time_ms);
 			sender_ptr->set_receive_url(task_content.url);

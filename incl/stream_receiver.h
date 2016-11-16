@@ -10,13 +10,10 @@
 #define _STREAM_RECEIVER_H_
 #pragma once
 
-#include <boost/lockfree/queue.hpp>
-#include <boost/filesystem.hpp>
+#include "pre_boost_basic.h"
 #include "pugixml.hpp"
 
 #include "stream_buffer.h"
-#include "response.h"
-#include "httpresponseparser.h"
 
 #include "tspacket.h"
 #include "stream_sender_buffer.h"
@@ -25,12 +22,16 @@
 #include "uri_parser.h"
 #include "m3u8Parser.h"
 #include "http_curl_client.h"
+#include "thread_pool.h"
 using namespace pugi;
 #ifdef __linux
 #include <error.h>
 #endif
 #include "data_types_defs.h"
 
+#include <boost/network/protocol/http/client.hpp>
+//using namespace boost::network;
+#define ENABLE_OUT_PCR 0 
 class StreamReceiver :public std::enable_shared_from_this<StreamReceiver> //: boost::signals2::trackable
 {
 public:
@@ -64,18 +65,16 @@ private:
      * @returns
      */
 	std::string _make_m3u8_cmd(const std::string &stream_url="");
-
 	bool _make_m3u8_cmd(HTTPM3U8CMD &m3u8_cmd, const std::string &stream_url="");
 
 	int _do_m3u8_task();
 
-	int _do_m3u8_task_group(const string &play_stream, const long int play_duration/*unit:s*/);
+	int _do_m3u8_task_boost();
+	int _do_m3u8_task_group(const std::string &play_stream, const long int play_duration/*unit:s*/);
 
 	int _send_m3u8_cmd(const std::string &m3u8_cmd);
 
 	void m3u8Callback(char *data, const long int &data_len, const bool &is_finished);
-
-	bool _parser_m3u8_file(const char *m3u8_data, const int &length, M3U8Data &m3u8_data_struct);
 
 	std::string _make_down_ts_cmd(const std::string &ts_file);
 
@@ -145,10 +144,15 @@ private:
 	TSSendSpscQueueType ts_send_spsc_queue_;//50M容量
 
 	TSSendUnlimitQueueType ts_send_unmlimt_queue_;
-	
 	TSTaskGroup ts_task_group_;
 	std::map<int, int> ts_task_group_2;
-	
+	//ThreadPool ts_task_pool_;
+
+	std::shared_ptr<boost::asio::io_service> io_svt_;
+	std::shared_ptr<boost::asio::io_service::work> worker_;
+	boost::asio::io_service::strand strand_;
+
+	boost::network::http::client m3u8_boost_http_client_;
 };
 
 typedef std::shared_ptr<StreamReceiver> StreamReceiverPtr;

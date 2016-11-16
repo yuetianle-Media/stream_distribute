@@ -5,9 +5,9 @@
  */
 
 #pragma once
-using namespace std;
 #include "errcode.h"
 #include "pre_std_basic.h"
+using namespace std;
 #define v_lock(l, m) std::lock_guard<decltype((m))> (l)((m))
 #define BUFFER_MAX_SIZE 524288/*<< 0.5M*/
 class StreamBuffer: public std::enable_shared_from_this<StreamBuffer>

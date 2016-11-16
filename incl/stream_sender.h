@@ -1,15 +1,15 @@
 #ifndef _STREAM_SENDER_H_
 #define _STREAM_SENDER_H_
 #pragma once
-#include <boost/lockfree/queue.hpp>
+
+#include "pre_boost_basic.h"
 #include "udpclient.h"
 #include "stream_buffer.h"
 #include "stream_sender_buffer.h"
 #include "tspacket.h"
 #include "data_types_defs.h"
 #include "stream_receiver.h"
-
-
+using namespace std;
 typedef struct IPPORTV
 {
 	std::string ip;

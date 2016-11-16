@@ -1,9 +1,9 @@
 #pragma once
 
-#include "curl/curl.h"
 #include "pre_std_basic.h"
 #include "pre_boost_basic.h"
 #include "pre_regex.h"
+#include "curl/curl.h"
 
 typedef boost::signals2::signal<void(char* data, const long int &data_len, const bool &is_finished)> DATA_SIGNAL;
 static size_t header_callback(char *buffer, size_t size, size_t nitems, void *userdata);

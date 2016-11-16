@@ -13,7 +13,7 @@
 #include "socket_session.h"
 #include "http_flags.h"
 
-using namespace boost;
+//using namespace boost;
 typedef boost::signals2::signal<void(char* data, const int& data_len)> DataReceiveSignal;
 
 /*

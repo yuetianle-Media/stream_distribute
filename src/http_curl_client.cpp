@@ -85,6 +85,21 @@ int HttpCurlClient::get(const std::string &url, const int &timeout_ms /*= 5000/*
 		*/
 		//curl_easy_setopt(session_, CURLOPT_WRITEDATA, this);
 		result = curl_easy_perform(session_);
+		if (result == CURLE_OK)
+		{
+			long response_code = 0;
+			double total_time = 0;
+			curl_easy_getinfo(session_, CURLINFO_RESPONSE_CODE, &response_code);
+			curl_easy_getinfo(session_, CURLINFO_TOTAL_TIME, &total_time);
+			if (response_code != 200)
+			{
+				return -1;
+			}
+			else
+			{
+				std::cout << "url:" << url << "time:" << total_time << std::endl;
+			}
+		}
 		is_data_ = false;
 		return result;
 	}
@@ -133,9 +148,15 @@ int HttpCurlClient::_set_base_option()
 		{
 			return result;
 		}
+		result = curl_easy_setopt(session_, CURLOPT_TIMEOUT_MS, 5000);
+		if (CURLE_OK != result)
+		{
+			return result;
+		}
 		result = curl_easy_setopt(session_, CURLOPT_CONNECTTIMEOUT_MS, 5000);
 		if (CURLE_OK != result)
 		{
+			std::cout << "error timeout" << std::endl;
 			return result;
 		}
 		result = curl_easy_setopt(session_, CURLOPT_HEADERFUNCTION, header_callback);
@@ -265,20 +286,20 @@ int tcp_option_callback(void *client_tp, curl_socket_t curlfd, curlsocktype purp
 {
 	if (purpose == CURLSOCKTYPE_IPCXN)
 	{
-		linker sock_linker;
-		sock_linker.l_onoff = 1;
-		sock_linker.l_linker = 3;
-		int result = setsockopt(curlfd, SOL_SOCKET, SO_LINGER, (const char*)&sock_linker, sizeof(linker));
+//		linker sock_linker;
+//		sock_linker.l_onoff = 0;
+//		sock_linker.l_linker = 3;
+//		int result = setsockopt(curlfd, SOL_SOCKET, SO_LINGER, (const char*)&sock_linker, sizeof(linker));
+//		if (0 != result)
+//		{
+//#ifdef WIN32
+//			std::cout << "socket set linker error:" << result << std::endl;
+//#else
+//			perror("socket set linker error:");
+//#endif // WIN32
+//		}
 		int recv_size = (int)(1024 * 1024 * 1.25);
-		if (0 != result)
-		{
-#ifdef WIN32
-			std::cout << "socket set linker error:" << result << std::endl;
-#else
-			perror("socket set linker error:");
-#endif // WIN32
-		}
-		result = setsockopt(curlfd, SOL_SOCKET, SO_RCVBUF, (char*)&recv_size, sizeof(recv_size));
+		int result = setsockopt(curlfd, SOL_SOCKET, SO_RCVBUF, (char*)&recv_size, sizeof(recv_size));
 		if (0 != result)
 		{
 #ifdef WIN32

@@ -1,0 +1,29 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ImportGroup Label="PropertySheets" />
+  <PropertyGroup Label="UserMacros">
+    <root>$(Registry:HKEY_LOCAL_MACHINE\Software\vistek\dev@sdk_root)</root>
+    <curl_home>$(root)curl\</curl_home>
+    <curl_lib>$(curl_home)lib</curl_lib>
+    <curl_include>$(curl_home)include</curl_include>
+  </PropertyGroup>
+  <PropertyGroup>
+    <IncludePath>$(curl_include);$(IncludePath)</IncludePath>
+    <LibraryPath>$(curl_lib);$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
+  <ItemDefinitionGroup />
+  <ItemGroup>
+    <BuildMacro Include="root">
+      <Value>$(root)</Value>
+    </BuildMacro>
+    <BuildMacro Include="curl_home">
+      <Value>$(curl_home)</Value>
+    </BuildMacro>
+    <BuildMacro Include="curl_lib">
+      <Value>$(curl_lib)</Value>
+    </BuildMacro>
+    <BuildMacro Include="curl_include">
+      <Value>$(curl_include)</Value>
+    </BuildMacro>
+  </ItemGroup>
+</Project>

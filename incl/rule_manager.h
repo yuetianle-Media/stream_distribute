@@ -4,13 +4,12 @@
  *
  */
 #pragma once
-#include "pugixml.hpp"
-#include <boost/lockfree/queue.hpp>
-#include <boost/filesystem.hpp>
-#include "errcode.h"
 #include "pre_std_basic.h"
 #include "pre_regex.h"
 #include "pre_boost_basic.h"
+
+#include "pugixml.hpp"
+#include "errcode.h"
 using namespace std;
 
 
@@ -67,8 +66,10 @@ public:
 	RuleManager(const std::string &config_file);
 	~RuleManager();
 
+	bool get_add_task_queue(TASKTYPE *&task_queue) { task_queue = &task_list_; return true; }
 	bool get_task(TASKCONTENT &task_content);
 
+	bool get_del_task_queue(TASKTYPE *&task_queue) { task_queue = &del_task_list_; return true; }
 	bool get_del_task(TASKCONTENT &task_content);
 
 	bool get_local_ip(std::string &local_ip);
@@ -104,7 +105,7 @@ private:
 
 	void _do_task();
 	void _do_task_ext();
-	std::shared_ptr<thread> task_;
+	std::shared_ptr<std::thread> task_;
 	bool b_exit_;
 	pugi::xml_document doc_;
 	std::string config_file_name_;

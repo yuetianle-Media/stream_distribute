@@ -1,7 +1,9 @@
 #ifndef _HTTP_FLAGS_H_
 #define _HTTP_FLAGS_H_
 #pragma once
-#include <string>
+
+#include "pre_std_basic.h"
+
 const std::string HTTP_HEAD_END = "\r\n\r\n";
 const std::string HTTP_CONTENT_LENGTH = "Content-Length";
 const std::string HTTP_RESPONSE_START_FLAG = "HTTP";

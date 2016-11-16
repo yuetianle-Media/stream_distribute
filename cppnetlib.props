@@ -1,0 +1,28 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ImportGroup Label="PropertySheets" />
+  <PropertyGroup Label="UserMacros">
+    <root>$(Registry:HKEY_LOCAL_MACHINE\Software\vistek\dev@sdk_root)</root>
+    <cppnethome>$(root)cppnetlib\</cppnethome>
+    <cppnetlib>$(cppnethome)lib</cppnetlib>
+  </PropertyGroup>
+  <PropertyGroup>
+    <LibraryPath>$(cppnetlib)\$(PlatformShortName);$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <Link>
+      <AdditionalDependencies>cppnetlib-client-connections.lib;cppnetlib-server-parsers.lib;cppnetlib-uri.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <BuildMacro Include="root">
+      <Value>$(root)</Value>
+    </BuildMacro>
+    <BuildMacro Include="cppnethome">
+      <Value>$(cppnethome)</Value>
+    </BuildMacro>
+    <BuildMacro Include="cppnetlib">
+      <Value>$(cppnetlib)</Value>
+    </BuildMacro>
+  </ItemGroup>
+</Project>

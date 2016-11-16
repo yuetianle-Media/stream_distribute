@@ -1,6 +1,5 @@
 #include "stdafx.h"
 #include "test_stream_receiver.h"
-#include <iostream>
 
 
 std::string out_ts_file = "";
@@ -41,20 +40,30 @@ inline void receive_ts_data(char *data, const int&data_len, const bool &is_finis
 };
 void test_stream_receive(const std::string &url)
 {
-	StreamReceiverPtr stream_receiver = make_shared<StreamReceiver>(url);
+	StreamReceiverPtr stream_receiver = std::make_shared<StreamReceiver>(url);
 	HttpCurlClient::init();
 	stream_receiver->start();
 	out_ts_file.append(boost::posix_time::to_iso_string(boost::posix_time::second_clock::local_time())).append(".ts");
 	open_file = fopen(out_ts_file.data(), "ab");
 	TSSendSpscQueueType *ts_send_queue = nullptr;
 	bool is_finished = false;
-	auto consume_task(new thread([&]()
+	auto consume_task(new std::thread([&]()
 	{
+		TSSendUnlimitQueueType *unlimint_queue = nullptr;
 		while (1)
 		{
 			if (is_finished)
 			{
 				break;
+			}
+			if (stream_receiver->get_unlimit_queue(unlimint_queue))
+			{
+				unlimint_queue->consume_all([](TSSENDCONTENT item) {
+					if (0 < item.real_size)
+					{
+						write_content_to_file("ts.ts", item.content, item.real_size);
+					}
+				});
 			}
 			if (stream_receiver->get_send_queue(ts_send_queue) && ts_send_queue)
 			{
@@ -69,7 +78,8 @@ void test_stream_receive(const std::string &url)
 		}
 	}));
 	//stream_receiver.subcribe_ts_callback(boost::bind(receive_ts_data,_1,_2, _3));
-	this_thread::sleep_for(std::chrono::seconds(60*10));
+	//Sleep(5000);
+	std::this_thread::sleep_for(std::chrono::seconds(60*10));
 	is_finished = true;
 	consume_task->join();
 	stream_receiver->stop();
@@ -88,7 +98,7 @@ void test_async_task()
 			while (1)
 			{
 				vvlog_i("task one this is cout");
-				this_thread::sleep_for(std::chrono::milliseconds(20));
+				std::this_thread::sleep_for(std::chrono::milliseconds(20));
 			}
 		});
 		task_list.push_back(task);
@@ -99,14 +109,14 @@ void test_async_task()
 			while (1)
 			{
 				vvlog_i("task two this is cout");
-				this_thread::sleep_for(std::chrono::milliseconds(20));
+				std::this_thread::sleep_for(std::chrono::milliseconds(20));
 			}
 		});
 		task_list.push_back(task);
 	});
 	while (true)
 	{
-		this_thread::sleep_for(std::chrono::seconds(5));
+		std::this_thread::sleep_for(std::chrono::seconds(5));
 	}
 }
 

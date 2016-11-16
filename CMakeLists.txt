@@ -24,6 +24,7 @@ set(CMAKE_C_COMPILER g++)
 set(CMAKE_CXX_COMPILER g++)
 add_compile_options(-std=c++11) #more than GCC4.7
 
+
 #工程版本类型
 OPTION(ENABLE_DEBUG "enable debug" ON)
 if(ENABLE_DEBUG STREQUAL ON)
@@ -62,6 +63,11 @@ if(CURL_FOUND)
 ELSE(CURL_FOUND)
     message(FATAL_ERROR "could not find curl library")
 ENDIF(CURL_FOUND)
+
+#添加http支持
+FIND_PACKAGE(cppnetlib 0.12.0 REQUIRED)
+include_directories(${CPPNETLIB_INCLUDE_DIRS})
+SET(requiredlibs ${requiredlibs} ${CPPNETLIB_LIBRARIES})
 
 #头文件包含目录 note:一个目录一行
 INCLUDE_DIRECTORIES(

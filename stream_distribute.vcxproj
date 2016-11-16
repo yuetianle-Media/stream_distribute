@@ -61,24 +61,28 @@
     <Import Project="boost.props" />
     <Import Project="curl.props" />
     <Import Project="zeromq.props" />
+    <Import Project="cppnetlib.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
     <Import Project="boost.props" />
     <Import Project="curl.props" />
     <Import Project="zeromq.props" />
+    <Import Project="cppnetlib.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
     <Import Project="boost.props" />
     <Import Project="curl.props" />
     <Import Project="zeromq.props" />
+    <Import Project="cppnetlib.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
     <Import Project="boost.props" />
     <Import Project="curl.props" />
     <Import Project="zeromq.props" />
+    <Import Project="cppnetlib.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -172,7 +176,6 @@
     <ClInclude Include="incl\demux.h" />
     <ClInclude Include="incl\dvb.h" />
     <ClInclude Include="incl\errcode.h" />
-    <ClInclude Include="incl\httpresponseparser.h" />
     <ClInclude Include="incl\http_curl_client.h" />
     <ClInclude Include="incl\http_flags.h" />
     <ClInclude Include="incl\m3u8define.h" />
@@ -184,7 +187,6 @@
     <ClInclude Include="incl\pre_std_basic.h" />
     <ClInclude Include="incl\pugiconfig.hpp" />
     <ClInclude Include="incl\pugixml.hpp" />
-    <ClInclude Include="incl\response.h" />
     <ClInclude Include="incl\rule_manager.h" />
     <ClInclude Include="incl\socket_session.h" />
     <ClInclude Include="incl\stream_buffer.h" />
@@ -193,6 +195,7 @@
     <ClInclude Include="incl\stream_sender.h" />
     <ClInclude Include="incl\stream_sender_buffer.h" />
     <ClInclude Include="incl\tcpclient.h" />
+    <ClInclude Include="incl\test_http_client.h" />
     <ClInclude Include="incl\test_http_curl_client.h" />
     <ClInclude Include="incl\test_m3u8_parser.h" />
     <ClInclude Include="incl\test_rule_manager.h" />
@@ -201,6 +204,7 @@
     <ClInclude Include="incl\test_stream_sender.h" />
     <ClInclude Include="incl\test_tcp_client.h" />
     <ClInclude Include="incl\test_udp_client.h" />
+    <ClInclude Include="incl\thread_pool.h" />
     <ClInclude Include="incl\tspacket.h" />
     <ClInclude Include="incl\udpclient.h" />
     <ClInclude Include="incl\udp_socket_session.h" />
@@ -228,6 +232,9 @@
     <ClCompile Include="src\stream_sender.cpp" />
     <ClCompile Include="src\stream_sender_buffer.cpp" />
     <ClCompile Include="src\tcpclient.cpp" />
+    <ClCompile Include="src\test_http_client.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Use</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="src\test_rule_manager.cpp" />
     <ClCompile Include="src\test_stream_receiver.cpp" />
     <ClCompile Include="src\test_udp_client.cpp" />

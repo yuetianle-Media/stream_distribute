@@ -6,6 +6,24 @@
 #define MPEG_FRAME_TYPE_P	2
 #define MPEG_FRAME_TYPE_B	3
 
+inline bool get_pcr(const unsigned char* p_ts_packet, PCR* p_pcr, int* p_pcr_pid)
+{
+	if ((p_ts_packet[0] == 0x47) &&
+		(p_ts_packet[3] & 0x20) &&
+		(p_ts_packet[5] & 0x10) &&
+		(p_ts_packet[4] >= 7))
+	{
+		*p_pcr_pid = ((int)p_ts_packet[1] & 0x1F) << 8 | p_ts_packet[2];
+
+		*p_pcr = ((int64_t)p_ts_packet[6] << 25) |
+			((int64_t)p_ts_packet[7] << 17) |
+			((int64_t)p_ts_packet[8] << 9) |
+			((int64_t)p_ts_packet[9] << 1) |
+			((int64_t)p_ts_packet[10] >> 7);
+		return true;
+	}
+	return false;
+}
 class CTsPacket
 {
 public:

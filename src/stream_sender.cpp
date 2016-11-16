@@ -32,7 +32,7 @@ StreamSender::StreamSender(StreamReceiverPtr receiver, const std::string &local_
 		udp_sender_ptr = std::make_shared<UDPClient>(0, 5000,local_ip_);
 	}
 	udp_sender_ptr->resize_send_buffer_size(1024 * 1024 * 1.25);
-	udp_sender_ptr->set_reuse(true);
+	//udp_sender_ptr->set_reuse(true);
 	udp_sender_ptr->set_noblock(true);
 #if ENABLE_OUTFILE
 	out_ts_file_ = fopen(out_file_name_.data(), "ab");
@@ -58,7 +58,7 @@ int StreamSender::start()
 	else
 	{
 		//send_task_thrd_.reset(new thread(std::bind(&StreamSender::_do_send_task_ext, this)));
-		send_task_thrd_.reset(new thread(std::bind(&StreamSender::_do_send_task, this)));
+		send_task_thrd_.reset(new std::thread(std::bind(&StreamSender::_do_send_task, this)));
 		if (send_task_thrd_)
 		{
 			send_task_thrd_->detach();
@@ -160,7 +160,7 @@ void StreamSender::_do_send_task_ext()
 	int64_t all_need_time = 0;
 	int64_t cur_time_count = 0;
 	int64_t send_start_time = 0;
-	std::cout << "send ts task pid:" << this_thread::get_id() << std::endl;
+	std::cout << "send ts task pid:" << std::this_thread::get_id() << std::endl;
 	while (1)
 	{
 		if (is_ts_task_exit_)
@@ -192,7 +192,8 @@ void StreamSender::_do_send_task_ext()
 				{
 					//this_thread::sleep_for(std::chrono::nanoseconds(all_need_time - all_run_time));
 					//this_thread::sleep_for(std::chrono::milliseconds(all_need_time - all_run_time));
-					this_thread::sleep_for(std::chrono::microseconds(all_need_time - all_run_time));
+					std::this_thread::sleep_for(std::chrono::microseconds(all_need_time - all_run_time));
+					//Sleep((all_need_time - all_run_time) / 1000);
 				}
 				sleep_packet_count = SLEEP_COUNT;
 				all_run_time = 0;
@@ -200,7 +201,7 @@ void StreamSender::_do_send_task_ext()
 			}
 		}
 		//this_thread::yield();
-		this_thread::sleep_for(std::chrono::nanoseconds(1));
+		std::this_thread::sleep_for(std::chrono::nanoseconds(1));
 	}
 }
 
@@ -270,13 +271,14 @@ void StreamSender::_do_send_task()
 	int64_t all_need_time = 0;
 	int64_t cur_time_count = 0;
 	int64_t send_start_time = 0;
-	std::cout << "send ts task pid:" << this_thread::get_id() << std::endl;
+	std::cout << "send ts task pid:" << std::this_thread::get_id() << std::endl;
 
 	int64_t start_time = 0;
 	int64_t cur_time = 0;
 	PCR cur_pcr = 0;
 	PCR first_pcr = 0;
 	bool is_first = false;
+	std::this_thread::sleep_for(std::chrono::seconds(5));
 	while (1)
 	{
 		if (is_ts_task_exit_)
@@ -286,15 +288,19 @@ void StreamSender::_do_send_task()
 		PCR cur_cout = cur_pcr - first_pcr;
 		cur_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 		int64_t time_cout = cur_time - start_time;
-		if (time_cout < cur_cout / 27000)
-		//if (time_cout < cur_cout / 27000000)
+		//if (time_cout < cur_cout / 27000)
+		if (time_cout < cur_cout / 90)
 		{
-			this_thread::sleep_for(std::chrono::milliseconds(10));
+			std::this_thread::sleep_for(std::chrono::milliseconds(10));
 			continue;
 		}
 		if(ts_data_queue->pop(ts_send_content))
 		{
 			//std::cout << "pop success" << std::endl;
+			//std::call_once(delay_flag_, []() 
+			//{
+			//	this_thread::sleep_for(std::chrono::seconds(3));
+			//});
 			if (ts_send_content.is_real_pcr && !is_first)
 			{
 				start_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
@@ -304,7 +310,8 @@ void StreamSender::_do_send_task()
 			}
 			if (ts_send_content.is_real_pcr)
 			{
-				if ((ts_send_content.cur_pcr - cur_pcr) / 90 > 10000 || ts_send_content.cur_pcr < cur_pcr)
+				//if ((ts_send_content.cur_pcr - cur_pcr) / 90 > 10000 || ts_send_content.cur_pcr < cur_pcr)
+				if ((ts_send_content.cur_pcr - cur_pcr) / 90 > 100 || ts_send_content.cur_pcr < cur_pcr)
 				{
 					first_pcr = ts_send_content.cur_pcr;
 					start_time = cur_time;
@@ -318,12 +325,13 @@ void StreamSender::_do_send_task()
 					, ts_send_content.need_time\
 					, item.second.ip\
 					, item.second.port);
+				//std::cout << "multi send len" << ts_send_content.real_size << std::endl;
 			}
 		}
 		else
 		{
-			std::cout << "pop fail" << std::endl;
-			this_thread::sleep_for(std::chrono::milliseconds(10));
+			//std::cout << "pop fail" << std::endl;
+			std::this_thread::sleep_for(std::chrono::microseconds(1));
 		}
 	}
 

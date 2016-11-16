@@ -1,16 +1,13 @@
 #include "stdafx.h"
 #include "test_udp_client.h"
-#include "tspacket.h"
-#include "stream_sender_buffer.h"
-#include "stream_sender.h"
 void test_udp_sync_client()
 {
-	std::shared_ptr<boost::asio::io_service> io_service = make_shared<boost::asio::io_service>();
+	std::shared_ptr<boost::asio::io_service> io_service = std::make_shared<boost::asio::io_service>();
 
-	udp::socket s(*io_service, udp::endpoint(udp::v4(), 0));
+	boost::asio::ip::udp::socket s(*io_service, boost::asio::ip::udp::endpoint(boost::asio::ip::udp::v4(), 0));
 
-	udp::resolver resolver_one(*io_service);
-	udp::endpoint endpoint(boost::asio::ip::address::from_string("224.0.2.190"), 5000);
+	boost::asio::ip::udp::resolver resolver_one(*io_service);
+	boost::asio::ip::udp::endpoint endpoint(boost::asio::ip::address::from_string("224.0.2.190"), 5000);
 
 	std::cout << "Enter message: ";
 	char request[1024] = {0};
@@ -19,7 +16,7 @@ void test_udp_sync_client()
 	s.send_to(boost::asio::buffer(request, request_length), endpoint);
 
 	char reply[1024];
-	udp::endpoint sender_endpoint;
+	boost::asio::ip::udp::endpoint sender_endpoint;
 	size_t reply_length = s.receive_from(
 		boost::asio::buffer(reply, 1024), sender_endpoint);
 	std::cout << "Reply is: ";
@@ -33,24 +30,23 @@ void open_ts_file(const string &file_name)
 	
 }
 
-//BOOL get_pcr(const PBYTE p_ts_packet, INT64* p_pcr, INT* p_pcr_pid)
+//bool get_pcr(const unsigned char* p_ts_packet, int64_t* p_pcr, int* p_pcr_pid)
 //{
 //	if ((p_ts_packet[0] == 0x47) &&
 //		(p_ts_packet[3] & 0x20) &&
 //		(p_ts_packet[5] & 0x10) &&
 //		(p_ts_packet[4] >= 7))
 //	{
-//		*p_pcr_pid = ((INT)p_ts_packet[1] & 0x1F) << 8 | p_ts_packet[2];
+//		*p_pcr_pid = ((int)p_ts_packet[1] & 0x1F) << 8 | p_ts_packet[2];
 //
-//		*p_pcr = ((INT64)p_ts_packet[6] << 25) |
-//			((INT64)p_ts_packet[7] << 17) |
-//			((INT64)p_ts_packet[8] << 9) |
-//			((INT64)p_ts_packet[9] << 1) |
-//			((INT64)p_ts_packet[10] >> 7);
-//		return TRUE;
+//		*p_pcr = ((int64_t)p_ts_packet[6] << 25) |
+//			((int64_t)p_ts_packet[7] << 17) |
+//			((int64_t)p_ts_packet[8] << 9) |
+//			((int64_t)p_ts_packet[9] << 1) |
+//			((int64_t)p_ts_packet[10] >> 7);
+//		return true;
 //	}
-//
-//	return FALSE;
+//	return false;
 //}
 
 #define SLEEP_COUNT_TEST 250
@@ -157,7 +153,8 @@ void read_ts_func()
 	std::cout << "queue size:" << all_queue_size << std::endl;
 	while (true)
 	{
-		this_thread::sleep_for(std::chrono::seconds(5));
+		//Sleep(5000);
+		std::this_thread::sleep_for(std::chrono::seconds(5));
 	}
 	if (fd)
 	{
@@ -168,8 +165,17 @@ void read_ts_func()
 void read_ts_func_ext()
 {
 	fstream ss;
-	ss.open("20161107T100344.ts", ios::in | ios::binary);
-	FILE* fd = fopen("20161107T100344.ts", "rb");
+#pragma region 定码率
+	//ss.open("20161107T100344.ts", ios::in | ios::binary);
+	//FILE* fd = fopen("20161107T100344.ts", "rb");
+
+	ss.open("20161115T114313.ts", ios::in | ios::binary);
+	FILE* fd = fopen("20161115T114313.ts", "rb");
+#pragma endregion 定码率
+#pragma region 变码率
+	//ss.open("20161114T155306.ts", ios::in | ios::binary);
+	//FILE* fd = fopen("20161114T155306.ts", "rb");
+#pragma endregion 变码率
 	if (!fd)
 	{
 		assert(false);
@@ -196,6 +202,10 @@ void read_ts_func_ext()
 			{
 				int result = sender_buffer_.push_to_buffer(ts_send_buffer, 188);
 				PCR packet_pcr = ts_packet_.Get_PCR();
+				//int64_t packet_pcr_m = 0;
+				PCR packet_pcr_m = 0;
+				int packet_pid = 0;
+				get_pcr((unsigned char*)ts_send_buffer, &packet_pcr_m, &packet_pid);
 				ts_packet_num_++;
 				if (INVALID_PCR != packet_pcr || 7 == ts_packet_num_)
 				{
@@ -205,7 +215,8 @@ void read_ts_func_ext()
 					if (packet_pcr != INVALID_PCR)
 					{
 						send_content.is_real_pcr = true;
-						send_content.cur_pcr = packet_pcr;
+						//send_content.cur_pcr = packet_pcr;
+						send_content.cur_pcr = packet_pcr_m;
 					}
 					if (!ts_send_content_queue_.push(send_content))
 					{
@@ -226,7 +237,8 @@ void read_ts_func_ext()
 	std::cout << "queue size:" << all_queue_size << std::endl;
 	while (true)
 	{
-		this_thread::sleep_for(std::chrono::seconds(5));
+		//Sleep(5000);
+		std::this_thread::sleep_for(std::chrono::seconds(5));
 	}
 	if (fd)
 	{
@@ -236,7 +248,7 @@ void read_ts_func_ext()
 }
 void test_udp_client(const string &addr, const int &port)
 {
-	UDPClientPtr client = make_shared<UDPClient>(0,5000,"224.1.1.1", 65002);
+	UDPClientPtr client = std::make_shared<UDPClient>(0,5000,"224.1.1.1", 65002);
 	client->resize_send_buffer_size(1024 * 1024 * 1.25);
 	//client->connect();
 	client->set_reuse(true);
@@ -253,16 +265,18 @@ void test_udp_client(const string &addr, const int &port)
 		int64_t start_time = 0;
 		PCR first_pcr = 0;
 		PCR cur_pcr = 0;
-		std::atomic<bool> is_fisrt = false;
+		bool is_fisrt = false;
 		int64_t cur_time = 0;
 		while (1)
 		{
 			PCR cur_cout = cur_pcr - first_pcr;
 			cur_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 			int64_t time_cout = cur_time - start_time;
-			if (time_cout < cur_cout / 27000)
+			//if (time_cout < cur_cout / 27000)
+			if (time_cout < cur_cout / 90)
 			{
-				this_thread::sleep_for(std::chrono::milliseconds(10));
+				//this_thread::sleep_for(std::chrono::milliseconds(10));
+				std::this_thread::sleep_for(std::chrono::milliseconds(10));
 				continue;
 			}
 			if(ts_send_content_queue_.pop(ts_content))
@@ -276,7 +290,9 @@ void test_udp_client(const string &addr, const int &port)
 				}
 				if (ts_content.is_real_pcr)
 				{
-					if ((ts_content.cur_pcr - cur_pcr) / 90 > 10000 || ts_content.cur_pcr < cur_pcr)
+					//std::cout << "pcr:" << ts_content.cur_pcr << std::endl;
+					//if ((ts_content.cur_pcr - cur_pcr) / 90 > 10000 || ts_content.cur_pcr < cur_pcr)
+					if ((ts_content.cur_pcr - cur_pcr) / 90 > 100 || ts_content.cur_pcr < cur_pcr)
 					{
 						first_pcr = ts_content.cur_pcr;
 						start_time = cur_time;
@@ -301,7 +317,7 @@ void test_udp_client(const string &addr, const int &port)
 
 	while (true)
 	{
-		this_thread::sleep_for(std::chrono::seconds(5));
+		std::this_thread::sleep_for(std::chrono::seconds(5));
 	}
 #pragma region Method2
 	std::thread task_thread([&]() {
@@ -346,7 +362,7 @@ void test_udp_client(const string &addr, const int &port)
 					if (all_need_time > all_run_time)
 					{
 						int64_t sleep_time = int64_t((all_need_time-all_run_time));
-						this_thread::sleep_for(std::chrono::nanoseconds((long)(sleep_time)));
+						std::this_thread::sleep_for(std::chrono::nanoseconds((long)(sleep_time)));
 					}
 					sleep_cout = SLEEP_COUNT_TEST;
 					all_run_time = 0;

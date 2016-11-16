@@ -7,9 +7,10 @@
 #include <strings.h>
 #endif // linux
 
-#include "m3u8define.h"
+#include "pre_boost_basic.h"
 #include "pre_regex.h"
-#include <boost/filesystem.hpp>
+
+#include "m3u8define.h"
 #include "errcode.h"
 //warning not thread safe.
 

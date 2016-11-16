@@ -38,10 +38,10 @@ void test_tcp_client()
 		}
 	} while (!is_receive);
 
-	this_thread::sleep_for(chrono::seconds(15));
+	std::this_thread::sleep_for(std::chrono::seconds(15));
 	tcp_client->wait_response();
 	while (1)
 	{
-		this_thread::sleep_for(chrono::seconds(5));
+		std::this_thread::sleep_for(std::chrono::seconds(5));
 	}
 }
