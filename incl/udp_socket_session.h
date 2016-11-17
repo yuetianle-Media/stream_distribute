@@ -14,6 +14,12 @@ using namespace std;
 
 class UDPSocketSession :public std::enable_shared_from_this<UDPSocketSession>
 {
+	static std::shared_ptr<boost::asio::io_service> _s_shared_service;
+	static std::shared_ptr<boost::asio::io_service::work> _s_shared_service_work;
+	static std::mutex _s_mtx_init;
+
+	static void s_init_thread_pool(const int &pool_size);
+	static void s_clean_thread_pool();
 public:
 	UDPSocketSession(const int &local_port, const int &timeout_ms, const std::string &local_ip="127.0.0.1");
 	~UDPSocketSession();
@@ -33,6 +39,7 @@ public:
 protected:
 	int local_port_;
 	int time_out_ms_;
+	bool use_shared_service_;
 	std::shared_ptr<boost::asio::io_service> io_svt_ptr_;
 	boost::asio::ip::udp::socket udp_socket_;
 	std::shared_ptr<boost::asio::io_service::work> work_;

@@ -148,11 +148,11 @@ int HttpCurlClient::_set_base_option()
 		{
 			return result;
 		}
-		result = curl_easy_setopt(session_, CURLOPT_TIMEOUT_MS, 5000);
-		if (CURLE_OK != result)
-		{
-			return result;
-		}
+		//result = curl_easy_setopt(session_, CURLOPT_TIMEOUT_MS, 5000);
+		//if (CURLE_OK != result)
+		//{
+		//	return result;
+		//}
 		result = curl_easy_setopt(session_, CURLOPT_CONNECTTIMEOUT_MS, 5000);
 		if (CURLE_OK != result)
 		{

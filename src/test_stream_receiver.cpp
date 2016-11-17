@@ -65,16 +65,6 @@ void test_stream_receive(const std::string &url)
 					}
 				});
 			}
-			if (stream_receiver->get_send_queue(ts_send_queue) && ts_send_queue)
-			{
-				ts_send_queue->consume_all([](TSSENDCONTENT item) 
-				{
-					if (0 < item.real_size)
-					{
-						write_content_to_file("ts.ts", item.content, item.real_size);
-					}
-				});
-			}
 		}
 	}));
 	//stream_receiver.subcribe_ts_callback(boost::bind(receive_ts_data,_1,_2, _3));

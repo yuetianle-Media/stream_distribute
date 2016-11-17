@@ -172,6 +172,7 @@ void StreamSender::_do_send_task_ext()
 			//send_start_time = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 			//send_start_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 			send_start_time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+			v_lock(lk, multicast_mtx_);
 			for (auto item : multicast_list_)
 			{
 				udp_sender_ptr->write_ext(ts_send_content.content\
@@ -278,7 +279,7 @@ void StreamSender::_do_send_task()
 	PCR cur_pcr = 0;
 	PCR first_pcr = 0;
 	bool is_first = false;
-	std::this_thread::sleep_for(std::chrono::seconds(5));
+	long int delay_time = send_delay_time_;
 	while (1)
 	{
 		if (is_ts_task_exit_)
@@ -297,10 +298,13 @@ void StreamSender::_do_send_task()
 		if(ts_data_queue->pop(ts_send_content))
 		{
 			//std::cout << "pop success" << std::endl;
-			//std::call_once(delay_flag_, []() 
-			//{
-			//	this_thread::sleep_for(std::chrono::seconds(3));
-			//});
+			if (0 < delay_time)
+			{
+				std::call_once(delay_flag_, [&]() 
+				{
+					std::this_thread::sleep_for(std::chrono::seconds(delay_time));
+				});
+			}
 			if (ts_send_content.is_real_pcr && !is_first)
 			{
 				start_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
@@ -318,6 +322,7 @@ void StreamSender::_do_send_task()
 				}
 				cur_pcr = ts_send_content.cur_pcr;
 			}
+			v_lock(lk, multicast_mtx_);
 			for (auto item : multicast_list_)
 			{
 				udp_sender_ptr->write_ext(ts_send_content.content\

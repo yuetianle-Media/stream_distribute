@@ -20,7 +20,7 @@ class StreamBuffer: public std::enable_shared_from_this<StreamBuffer>
 		bool  pop_data(char *dest, const int &dest_len, const int &data_len);
 		bool is_empty();
         char* data() { return (char*)data_content_; }
-		const long int data_len() const { return data_size_; }
+		const long int data_len() { v_lock(lk, mtx_data_); return data_size_; }
     private:
         std::atomic<int> current_index_;
         std::atomic<int> data_size_;

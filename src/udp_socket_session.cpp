@@ -1,10 +1,55 @@
 #include "stdafx.h"
 #include "udp_socket_session.h"
 
+shared_ptr<boost::asio::io_service> UDPSocketSession::_s_shared_service(new boost::asio::io_service);
+
+shared_ptr<boost::asio::io_service::work> UDPSocketSession::_s_shared_service_work;
+
+std::mutex UDPSocketSession::_s_mtx_init;
+
+
+void UDPSocketSession::s_init_thread_pool(const int &pool_size)
+{
+	if (!_s_shared_service_work)
+	{
+		v_lock(lk, _s_mtx_init);
+		if (!_s_shared_service_work)
+		{
+			_s_shared_service_work = std::make_shared<boost::asio::io_service::work>(*_s_shared_service);
+			int size = pool_size <= 0 ? std::thread::hardware_concurrency() : pool_size;
+			auto svc = _s_shared_service;
+			for (int i = 0; i < size; ++i)
+			{
+				std::thread task([svc]() 
+				{
+					boost::system::error_code ec;
+					svc->run(ec);
+					std::cout << "s_shared_service complete." << std::endl;
+				});
+				task.detach();
+			}
+		}
+	}
+}
+
+
+void UDPSocketSession::s_clean_thread_pool()
+{
+	if (_s_shared_service_work)
+	{
+		v_lock(lk, _s_mtx_init);
+		if (_s_shared_service_work)
+		{
+			_s_shared_service_work.reset();
+		}
+	}
+}
+
 UDPSocketSession::UDPSocketSession(const int &local_port, const int &timeout_ms, const std::string &local_ip/*="127.0.0.1"*/)
     : local_port_(local_port)\
 	, time_out_ms_(timeout_ms)\
-	, io_svt_ptr_(make_shared<boost::asio::io_service>())
+	, use_shared_service_(false)
+	, io_svt_ptr_(use_shared_service_?_s_shared_service:std::make_shared<boost::asio::io_service>())
 	, udp_socket_(*io_svt_ptr_, boost::asio::ip::udp::endpoint(boost::asio::ip::udp::v4(), local_port))
 	, strand_(udp_socket_.get_io_service())\
 	, timer_ptr_(0)
@@ -22,12 +67,19 @@ UDPSocketSession::UDPSocketSession(const int &local_port, const int &timeout_ms,
 		}
 	}
 	auto svc = io_svt_ptr_;
-	thread thrd([svc]
+	if (use_shared_service_)
 	{
-		boost::system::error_code ec;
-		svc->run(ec);
-	});
-	thrd.detach();
+		s_init_thread_pool(4);
+	}
+	else
+	{
+		thread thrd([svc]
+		{
+			boost::system::error_code ec;
+			svc->run(ec);
+		});
+		thrd.detach();
+	}
 }
 
 UDPSocketSession::~UDPSocketSession()

@@ -33,6 +33,10 @@ bool StreamBuffer::pop_data(char *dest, const int &dest_len, const int &data_len
 	{
 		return false;
 	}
+	if (data_content_[0] != 0x47)
+	{
+		assert(false);
+	}
 	//将代取出的数据拷贝出去
 	if (dest && dest_len >= data_len &&data_size_ >= data_len)
 	{

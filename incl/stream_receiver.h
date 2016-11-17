@@ -31,6 +31,19 @@ using namespace pugi;
 
 #include <boost/network/protocol/http/client.hpp>
 //using namespace boost::network;
+
+
+typedef struct body_callback
+{
+	explicit body_callback(std::string &body):body(body)
+	{}
+	BOOST_NETWORK_HTTP_BODY_CALLBACK(operator(), range, error)
+	{
+		body.append(std::begin(range), std::end(range));
+	}
+	std::string &body;
+}BODY_CALLBACK;
+
 #define ENABLE_OUT_PCR 0 
 class StreamReceiver :public std::enable_shared_from_this<StreamReceiver> //: boost::signals2::trackable
 {
@@ -41,7 +54,6 @@ public:
 	int start();
 	void stop();
 	//bool get_send_queue(TSSendQueueType *&send_queue) { send_queue = &ts_send_content_queue_; return true; }
-	bool get_send_queue(TSSendSpscQueueType *&send_queue) { send_queue = &ts_send_spsc_queue_; return true; }
 	bool get_unlimit_queue(TSSendUnlimitQueueType *&unlimit_queue) { unlimit_queue = &ts_send_unmlimt_queue_; return true; }
 public:
     /**
@@ -89,8 +101,13 @@ private:
 
 	int _do_ts_task();
 
+	int _do_ts_task_boost();
+
 	int _send_ts_cmd(const std::string &ts_cmd);
 
+	int _send_ts_cmd_boost(const std::string &ts_cmd);
+
+	int _push_ts_data_to_queue(string &ts_data);
 	void tsCallback(char *data, const long int &data_len, const bool&is_finished);
 
 	void _do_parse_ts_data();
@@ -99,7 +116,7 @@ private:
 
 	void _push_ts_data_to_send_queue(char *data, const long int &data_len, const int &need_time/*bytes:(188*7):micro*/);
 
-	void _write_ts_file_list(const string &out_file_name, const string &ts_file_name, const int &index);
+	void _write_ts_file_list(const string &out_file_name, const string &ts_file_name, const int &index, const string &time="");
 
 	void _write_content_to_file(const string &out_file_name, char *data, const int &data_len);
 private:
@@ -141,11 +158,9 @@ private:
 
 	StreamBuffer receive_ts_buffer_;
 	TSPacketSpscQueueType ts_spsc_packet_queue;
-	TSSendSpscQueueType ts_send_spsc_queue_;//50M容量
 
 	TSSendUnlimitQueueType ts_send_unmlimt_queue_;
 	TSTaskGroup ts_task_group_;
-	std::map<int, int> ts_task_group_2;
 	//ThreadPool ts_task_pool_;
 
 	std::shared_ptr<boost::asio::io_service> io_svt_;
@@ -153,6 +168,7 @@ private:
 	boost::asio::io_service::strand strand_;
 
 	boost::network::http::client m3u8_boost_http_client_;
+	boost::network::http::client ts_boost_http_client_;
 };
 
 typedef std::shared_ptr<StreamReceiver> StreamReceiverPtr;
