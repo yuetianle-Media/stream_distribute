@@ -15,24 +15,27 @@ StreamManager::~StreamManager()
 
 bool StreamManager::start()
 {
-	if (!add_task_)
-	{
-		add_task_.reset(new std::thread(std::bind(&StreamManager::_do_add_tasks_callback, this)));
-	}
-	if (!remove_task_)
-	{
-		remove_task_.reset(new std::thread(std::bind(&StreamManager::_do_del_tasks_callback, this)));
-	}
-	if (add_task_ && remove_task_)
-	{
-		add_task_->detach();
-		remove_task_->detach();
-		return true;
-	}
-	else
-	{
-		return false;
-	}
+	rules_manager_->subcribe_add_task(boost::bind(&StreamManager::_do_add_task_signal, this, _1));
+	rules_manager_->subcribe_del_task(boost::bind(&StreamManager::_do_del_task_signal, this, _1));
+	return true;
+	//if (!add_task_)
+	//{
+	//	add_task_.reset(new std::thread(std::bind(&StreamManager::_do_add_tasks_callback, this)));
+	//}
+	//if (!remove_task_)
+	//{
+	//	remove_task_.reset(new std::thread(std::bind(&StreamManager::_do_del_tasks_callback, this)));
+	//}
+	//if (add_task_ && remove_task_)
+	//{
+	//	add_task_->detach();
+	//	remove_task_->detach();
+	//	return true;
+	//}
+	//else
+	//{
+	//	return false;
+	//}
 }
 
 bool StreamManager::stop()
@@ -49,6 +52,64 @@ bool StreamManager::stop()
 	}
 	remove_task_ = nullptr;
 	return true;
+}
+
+void StreamManager::_do_add_task_signal(const TASKCONTENT&task_content)
+{
+	std::string multi_addr;
+	std::ostringstream ss_out;
+	for (int index=0; index < task_content.addr_cout; index++)
+	{
+		ss_out << task_content.remote_addr_list[index].ip\
+			<< ":" << task_content.remote_addr_list[index].port << ";";
+	}
+	multi_addr = ss_out.str();
+	std::string local_ip;
+	bool add_success = false;
+	if (rules_manager_->get_local_ip(local_ip) && !local_ip.empty())
+	{
+		add_success = _do_add_task(task_content, local_ip);
+	}
+	else
+	{
+		add_success = _do_add_task(task_content);
+	}
+	if (add_success)
+	{
+		vvlog_i("add stream task success url:" << task_content.url\
+			<< "multiaddress cout:" << task_content.addr_cout\
+			<< "address:" << multi_addr);
+	}
+	else
+	{
+		vvlog_e("add stream task fail url:" << task_content.url\
+			<< "multiaddress cout:" << task_content.addr_cout\
+			<< "address:" << multi_addr);
+	}
+}
+
+void StreamManager::_do_del_task_signal(const TASKCONTENT&task_content)
+{
+	std::string multi_addr;
+	std::ostringstream ss_out;
+	for (auto item : task_content.remote_addr_list)
+	{
+		ss_out << item.ip << ":" << item.port;
+	}
+	multi_addr = ss_out.str();
+	if (_do_remove_task(task_content))
+	{
+		vvlog_i("del stream task success url:" << task_content.url\
+			<< "multiaddress cout:" << task_content.addr_cout\
+			<< "address:" << multi_addr);
+	}
+	else
+	{
+		vvlog_e("del stream task fail url:" << task_content.url\
+			<< "multiaddress cout:" << task_content.addr_cout\
+			<< "address:" << multi_addr);
+	}
+
 }
 
 void StreamManager::_do_add_tasks_callback()
@@ -239,9 +300,10 @@ bool StreamManager::_do_remove_task(const TASKCONTENT &task_content)
 		}
 		if (task_content.addr_cout == multi_ip_count)//无转发任务
 		{
+			iter->second.sender->stop();
+
 			iter->second.receiver->stop();
 			iter->second.receiver->unsubcribe_ts_callback();
-			iter->second.sender->stop();
 
 			stream_map_.erase(task_content.url);//从流表中删除
 		}

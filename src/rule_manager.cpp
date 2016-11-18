@@ -18,90 +18,14 @@ RuleManager::~RuleManager()
 	this_thread::sleep_for(std::chrono::microseconds(1));
 }
 
-int RuleManager::_load_config_file(const string &config_file)
+boost::signals2::connection RuleManager::subcribe_add_task(const ADD_TASK_SIGNAL::slot_type &slot)
 {
-	if (config_file.empty())
-	{
-		return E_FILE_EMPTY;
-	}
-	boost::filesystem::path config_file_path(config_file);
-	if (!boost::filesystem::exists(config_file_path) || !boost::filesystem::is_regular_file(config_file_path))
-	{
-		return E_FILE_ERROR;
-	}
-	pugi::xml_parse_result result = doc_.load_file(config_file_path.c_str());
-	if (pugi::xml_parse_status::status_ok == result.status)
-	{
+	return add_task_signal_.connect(slot);
+}
 
-		pugi::xml_node local_address_node = doc_.child("local_address");
-		if (local_address_node)
-		{
-			v_lock(lk, local_ip_mtx);
-			local_ip_ = local_address_node.attribute("ip").as_string();
-		}
-		pugi::xml_node rules_node = doc_.child("rules");
-		pugi::xml_node root_node = doc_.first_child();
-		for (pugi::xml_node_iterator it = rules_node.begin(); it != rules_node.end(); it++)
-		{
-			TASKCONTENT task_content;
-			string url = it->attribute((char*)(RuleManager::URL_ATTR_NAME)).as_string();
-			pugi::xml_attribute delay_time_attr = it->attribute((char*)(RuleManager::URL_ATTR_DELAY_TIME));
-			if (delay_time_attr)
-			{
-				task_content.delay_time_ms = delay_time_attr.as_int();
-			}
-			memcpy(task_content.url, url.data(), url.length());
-			int ip_index = 0;
-			int real_ip_index = 0;
-			for (pugi::xml_node_iterator ip_node = it->begin(); ip_node != it->end(); ip_node++)
-			{
-				if (ip_index > MAX_DISTRIBUTE-1)//if ip more than max_distribute ignore the last ip.
-					break;
-				string ip = ip_node->attribute((char*)(RuleManager::IP_ATTR_NAME)).as_string();
-				int port = ip_node->attribute((char*)(RuleManager::PORT_ATTR_NAME)).as_int();
-				char stream_id_str[1024] = { 0 };
-				sprintf(stream_id_str, "%s:%s:%d", url.data(), ip.data(), port);
-				stream_rule_iter iter = stream_distribute_rules_.find(stream_id_str);
-				//if the rules has't add ignore it.
-				if (iter == stream_distribute_rules_.end())
-				{
-					memcpy(task_content.remote_addr_list[real_ip_index].ip, ip.data(), ip.length());
-					task_content.remote_addr_list[real_ip_index].port = port;
-
-					RULECONTENT rule_content;
-					memcpy(rule_content.url, url.data(), url.length());
-					memcpy(rule_content.remote_addr.ip, ip.data(), ip.length());
-					rule_content.remote_addr.port = port;
-					stream_distribute_rules_.insert(make_pair(stream_id_str, rule_content));
-					real_ip_index++;
-				}
-				ip_index++;
-			}
-			try
-			{
-				if (0 < real_ip_index)
-				{
-					task_content.addr_cout = real_ip_index;
-					task_list_.push(task_content);//push the task to the queue.
-				}
-				else
-				{
-					//cout << "no tasks need add " << std::endl;
-				}
-			}
-			catch(exception e)
-			{
-				cout << e.what() << std::endl;
-
-			}
-		}
-		doc_.reset();
-		return E_OK;
-	}
-	else
-	{
-		return E_FILE_BAD_FORMAT;
-	}
+boost::signals2::connection RuleManager::subcribe_del_task(const ADD_TASK_SIGNAL::slot_type &slot)
+{
+	return del_task_signal_.connect(slot);
 }
 
 int RuleManager::_load_config_file(const string &config_file, RULECONTENTTYPE &cur_rules_content)
@@ -214,7 +138,8 @@ int RuleManager::_push_add_task(const TASKCONTENTLIST &add_task_list)
 		cout << "add list:" << std::endl;
 	for (auto item : add_task_list)
 	{
-		task_list_.push(item);
+		//task_list_.push(item);
+		add_task_signal_(item);
 		cout << "url:" << item.url << "cout:" << item.addr_cout << std::endl;
 		for (int index = 0; index < item.addr_cout; index++)
 		{
@@ -277,24 +202,14 @@ int RuleManager::_push_del_task(const TASKCONTENTLIST &del_task_list)
 	for (auto item : del_task_list)
 	{
 		cout << "url:" << item.url << " cout:" << item.addr_cout << std::endl;
-		del_task_list_.push(item);
+		del_task_signal_(item);
+		//del_task_list_.push(item);
 		for (int index = 0; index < item.addr_cout; index++)
 		{
 			cout << "ip:" << item.remote_addr_list[index].ip << "port:" << item.remote_addr_list[index].port << std::endl;
 		}
 	}
 	return E_OK;
-}
-
-void RuleManager::_do_task()
-{
-	while (1)
-	{
-		if (b_exit_)
-			break;
-		_load_config_file(config_file_name_);
-		this_thread::sleep_for(std::chrono::seconds(task_interval_));
-	}
 }
 
 void RuleManager::_do_task_ext()
@@ -362,7 +277,6 @@ void RuleManager::_start_task(const int interveral/*=5*/)
 		cout << "task is running thread id:" << task_->get_id() << std::endl;
 		return;
 	}
-	//task_.reset(new thread(std::bind(&RuleManager::_do_task, this)));
 	task_.reset(new thread(std::bind(&RuleManager::_do_task_ext, this)));
 	//if (task_)
 	//{

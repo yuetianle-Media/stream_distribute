@@ -39,10 +39,21 @@ typedef struct body_callback
 	{}
 	BOOST_NETWORK_HTTP_BODY_CALLBACK(operator(), range, error)
 	{
-		body.append(std::begin(range), std::end(range));
+		if (!error)
+		{
+			for (auto item : range)
+			{
+				ts_data.push_back(item);
+			}
+			//std::cout << "receive:" << boost::distance(range) << "bytes" << std::endl;
+		}
+			//body.append(boost::begin(range), boost::end(range));
 	}
+	std::vector<char> ts_data;
 	std::string &body;
 }BODY_CALLBACK;
+
+typedef std::vector<std::shared_ptr<boost::network::http::client::response>> RESPONSE_LIST_TYPE;
 
 #define ENABLE_OUT_PCR 0 
 class StreamReceiver :public std::enable_shared_from_this<StreamReceiver> //: boost::signals2::trackable
@@ -161,7 +172,7 @@ private:
 
 	TSSendUnlimitQueueType ts_send_unmlimt_queue_;
 	TSTaskGroup ts_task_group_;
-	//ThreadPool ts_task_pool_;
+	ThreadPool ts_task_pool_;
 
 	std::shared_ptr<boost::asio::io_service> io_svt_;
 	std::shared_ptr<boost::asio::io_service::work> worker_;

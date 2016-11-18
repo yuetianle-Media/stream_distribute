@@ -286,7 +286,7 @@ void StreamSender::_do_send_task()
 		{
 			break;
 		}
-		PCR cur_cout = cur_pcr - first_pcr;
+		PCR cur_cout = cur_pcr - first_pcr; 
 		cur_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 		int64_t time_cout = cur_time - start_time;
 		//if (time_cout < cur_cout / 27000)

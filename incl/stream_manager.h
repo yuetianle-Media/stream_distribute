@@ -19,15 +19,19 @@ typedef struct MStreamContent
 	}
 }StreamContent;
 typedef std::map<std::string, StreamContent> StreamMap;/*<< url:receiver+sender*/
-class StreamManager
+class StreamManager :public std::enable_shared_from_this<StreamManager>
 {
 public:
 	StreamManager(const string &config_file);
+
 	~StreamManager();
 
 	bool start();
 	bool stop();
 private:
+
+	void _do_add_task_signal(const TASKCONTENT&task_content);
+	void _do_del_task_signal(const TASKCONTENT&task_content);
 
 	void _do_add_tasks_callback();
 	void _do_del_tasks_callback();
@@ -39,8 +43,6 @@ private:
 	std::shared_ptr<std::thread> remove_task_;
 	string rule_config_file_;
 	RuleManagerPtr rules_manager_;
-	ReceiverMap receiver_;
-	SenderMap sender_;
 	StreamMap stream_map_;
 	std::mutex stream_map_mutex_;
 	std::atomic<bool> is_exit_;

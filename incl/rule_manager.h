@@ -12,7 +12,6 @@
 #include "errcode.h"
 using namespace std;
 
-
 struct IPPORT
 {
 	char ip[16];
@@ -36,6 +35,9 @@ struct TASKCONTENT
 		memset(url, 0, sizeof(TASKCONTENT));
 	}
 };
+
+typedef boost::signals2::signal<void(const TASKCONTENT &)> ADD_TASK_SIGNAL;
+typedef boost::signals2::signal<void(const TASKCONTENT &)> DEL_TASK_SIGNAL;
 
 typedef std::vector<TASKCONTENT> TASKCONTENTLIST;
 typedef std::map<std::string, TASKCONTENT> TASKCONTENTMAP;/*<< url:task_content*/
@@ -66,6 +68,10 @@ public:
 	RuleManager(const std::string &config_file);
 	~RuleManager();
 
+	boost::signals2::connection subcribe_add_task(const ADD_TASK_SIGNAL::slot_type &slot);
+
+	boost::signals2::connection subcribe_del_task(const ADD_TASK_SIGNAL::slot_type &slot);
+
 	bool get_add_task_queue(TASKTYPE *&task_queue) { task_queue = &task_list_; return true; }
 	bool get_task(TASKCONTENT &task_content);
 
@@ -86,12 +92,6 @@ protected:
 	 */
 	void _stop_task();
 private:
-	/**
-	 * @brief _load_config_file load config files.
-	 *
-	 * @returns success:0 else error code(-1:read fail)
-	 */
-	int _load_config_file(const string &config_file);
 
 	int _load_config_file(const string &config_file, RULECONTENTTYPE &cur_rules_content);
 
@@ -103,7 +103,6 @@ private:
 
 	int _push_del_task(const TASKCONTENTLIST &del_task_list);
 
-	void _do_task();
 	void _do_task_ext();
 	std::shared_ptr<std::thread> task_;
 	bool b_exit_;
@@ -118,5 +117,7 @@ private:
 
 	std::mutex local_ip_mtx;
 	std::string local_ip_;
+	ADD_TASK_SIGNAL add_task_signal_;
+	DEL_TASK_SIGNAL del_task_signal_;
 };
 typedef std::shared_ptr<RuleManager> RuleManagerPtr;

@@ -8,7 +8,7 @@ StreamReceiver::StreamReceiver(const string &url)
 	, m3u8_thrd_ptr_(nullptr), ts_thrd_ptr_(nullptr), parse_ts_thrd_(nullptr)\
 	, b_exit_m3u8_task_(false), b_exit_ts_task_(false), b_exit_parse_task_(false)\
 	, ts_file_index_(0), uri_(url), receive_ts_buffer_(TS_PACKET_LENGTH_STANDARD*7*400)\
-	, ts_send_unmlimt_queue_(1024*50), play_stream_count_(0)/*, ts_task_pool_(4)*/\
+	, ts_send_unmlimt_queue_(1024*50), play_stream_count_(0), ts_task_pool_(4)\
 	, io_svt_(std::make_shared<boost::asio::io_service>()), strand_(*io_svt_)
 {
 	worker_ = std::make_shared<boost::asio::io_service::work>(*io_svt_);
@@ -260,18 +260,27 @@ int StreamReceiver::_send_ts_cmd_boost(const std::string &ts_cmd)
 		boost::network::http::client::response ts_response;
 		ts_request.uri(ts_cmd);
 		ts_response = ts_boost_http_client_.get(ts_request);
-		//boost::shared_future<uint16_t> status_code;
-		//ts_response.status(status_code);
-		//if (200 ==  status_code.get())
 		if (200 == ts_response.status())
 		{
-			//boost::shared_future<std::string> ts_data_out;
-			//ts_response.body(ts_data_out);
-			std::string ts_data = ts_response.body();
-			_push_ts_data_to_queue(ts_data);
+			try
+			{
+				std::string ts_data = ts_response.body();
+				//int data_size = _push_ts_data_to_queue(ts_data);
+				vvlog_i("send ts cmd:" << ts_cmd\
+					<< " size:" << ts_data.length()\
+					<< "pid:" << std::this_thread::get_id());
+				ts_data.clear();
+			}
+			catch (std::exception e)
+			{
+				std::cout << "std alloc faile" << e.what() << std::endl;
+			}
 		}
 		else
 		{
+			vvlog_e("send ts fail cmd:" << ts_cmd\
+				<< "code:" << ts_response.status()\
+				<< "msg:" << ts_response.status_message());
 			return E_DATA_EMPTY;
 		}
 	}
@@ -280,7 +289,6 @@ int StreamReceiver::_send_ts_cmd_boost(const std::string &ts_cmd)
 		std::cout << "error:" << e.what() << std::endl;
 	}
 	return result;
-
 }
 
 int StreamReceiver::_push_ts_data_to_queue(string &ts_data)
@@ -308,7 +316,7 @@ int StreamReceiver::_push_ts_data_to_queue(string &ts_data)
 	{
 		assert(false);
 	}
-	return E_OK;
+	return data_size;
 }
 
 int StreamReceiver::_push_ts_cmd_to_queue(const string &ts_cmd_str)
@@ -329,7 +337,7 @@ int StreamReceiver::_push_ts_cmd_to_queue(const string &ts_cmd_str)
 		}
 		if (!ts_task_file_name_.empty())
 		{
-			_write_ts_file_list(ts_task_file_name_, ts_cmd_str, 0);
+			_write_ts_file_list(ts_task_file_name_, ts_cmd_str, 0, cur_time);
 		}
 	}
 	return 0;
@@ -689,16 +697,49 @@ int StreamReceiver::_do_ts_task_boost()
 		{
 			break;
 		}
-		ts_task_list_.consume_all([&](HTTPTSCMD ts_cmd)
+
+		//ts_task_list_.consume_all([&](HTTPTSCMD ts_cmd)
+		//{
+		//	if (b_exit_ts_task_)
+		//	{
+		//		return;
+		//	}
+		//	vvlog_i("send ts start cmd:" << ts_cmd.cmd << "pid:" << std::this_thread::get_id());
+		//	_send_ts_cmd_boost(ts_cmd.cmd);
+		//	vvlog_i("send ts end cmd:" << ts_cmd.cmd << "pid:" << std::this_thread::get_id());
+		//});
+		ts_task_pool_.enqueue([&]()
 		{
-			if (b_exit_ts_task_)
+			ts_task_list_.consume_all([&](HTTPTSCMD ts_cmd)
 			{
-				return;
-			}
-			vvlog_i("send ts start cmd:" << ts_cmd.cmd);
-			_send_ts_cmd_boost(ts_cmd.cmd);
-			vvlog_i("send ts end cmd:" << ts_cmd.cmd);
+				if (b_exit_ts_task_)
+				{
+					return;
+				}
+				//vvlog_i("send ts start cmd:" << ts_cmd.cmd << "pid:" << std::this_thread::get_id());
+				_send_ts_cmd_boost(ts_cmd.cmd);
+				//vvlog_i("send ts end cmd:" << ts_cmd.cmd << "pid:" << std::this_thread::get_id());
+			});
 		});
+		//int task_count = 2;
+		//while (0 < task_count)
+		//{
+		//	--task_count;
+		//	ts_task_pool_.enqueue([&]()
+		//	{
+		//		ts_task_list_.consume_all([&](HTTPTSCMD ts_cmd)
+		//		{
+		//			if (b_exit_ts_task_)
+		//			{
+		//				return;
+		//			}
+		//			//vvlog_i("send ts start cmd:" << ts_cmd.cmd << "pid:" << std::this_thread::get_id());
+		//			_send_ts_cmd_boost(ts_cmd.cmd);
+		//			//vvlog_i("send ts end cmd:" << ts_cmd.cmd << "pid:" << std::this_thread::get_id());
+		//		});
+		//	});
+		//}
+		//std::cout << "data size:" << ts_callback.ts_data.size();
 		//HTTPTSCMD ts_cmd_struct;
 		//while (ts_task_list_.pop(ts_cmd_struct))
 		//{
@@ -915,9 +956,9 @@ void StreamReceiver::_do_parse_ts_data_ext()
 		{
 			if (ts_data.real_size < TS_PACKET_LENGTH_STANDARD)
 			{
-				vvlog_e("ts not complete packet");
+				vvlog_e("ts not complete packet, url:"<< play_stream_ << "size:" << ts_data.real_size);
 			}
-			if (!ts_data.content || ts_data.content[0] != 0x47)
+			if (0 < ts_data.real_size && ts_data.content[0] != 0x47)
 			{
 				assert(false);
 			}
@@ -957,6 +998,7 @@ void StreamReceiver::_do_parse_ts_data_ext()
 				std::cout << "invaild packet, url:" << std::endl;
 				//vvlog_e("it is a invalid packet!! receiverurl:"<<receive_url_ << "len:" << ts_data.real_size);
 			}
+			memset(&ts_data, 0, sizeof(ts_data));
 		}
 		//this_thread::yield();
 		std::this_thread::sleep_for(std::chrono::microseconds(1));

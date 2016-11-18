@@ -9,5 +9,6 @@
 #endif
 
 #pragma comment(lib, "libcurl.lib")
+
 // TODO: 在 STDAFX.H 中引用任何所需的附加头文件，
 //而不是在此文件中引用
