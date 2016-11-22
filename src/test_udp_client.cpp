@@ -301,7 +301,6 @@ void test_udp_client(const string &addr, const int &port)
 				}
 				int result = client->write_ext(ts_content.content\
 					, ts_content.real_size\
-					, ts_content.need_time\
 					, "224.1.1.1"\
 					, 65002);
 			}
@@ -347,7 +346,6 @@ void test_udp_client(const string &addr, const int &port)
 			start_time = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 			int result = client->write_ext(ts_content.content\
 				, ts_content.real_size\
-				, ts_content.need_time\
 				, "224.1.1.1"\
 				, 65002);
 			if (result == E_OK)
@@ -355,7 +353,7 @@ void test_udp_client(const string &addr, const int &port)
 				success_time = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 				int64_t run_time_count = success_time - start_time;
 				all_run_time += run_time_count;
-				all_need_time += ts_content.need_time;
+				/*all_need_time += ts_content.need_time;*/
 				sleep_cout -= 1;
 				if (0 == sleep_cout)
 				{

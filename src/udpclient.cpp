@@ -36,7 +36,7 @@ int UDPClient::sync_write(char *data, const long &data_size, const string &ip, c
 	return E_OK;
 }
 
-int UDPClient::write_ext(char *data, const long int &data_len, const double &need_time, const string &remote_addr, const int &remote_port)
+int UDPClient::write_ext(char *data, const long int &data_len, const string &remote_addr, const int &remote_port)
 {
 	auto self = shared_from_this();
 	boost::asio::ip::udp::endpoint remote_ep(boost::asio::ip::address_v4::from_string(remote_addr), remote_port);

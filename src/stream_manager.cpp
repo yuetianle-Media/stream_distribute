@@ -78,13 +78,13 @@ void StreamManager::_do_add_task_signal(const TASKCONTENT&task_content)
 	{
 		vvlog_i("add stream task success url:" << task_content.url\
 			<< "multiaddress cout:" << task_content.addr_cout\
-			<< "address:" << multi_addr);
+			<< "address:" << multi_addr << "thread id:" << std::this_thread::get_id());
 	}
 	else
 	{
 		vvlog_e("add stream task fail url:" << task_content.url\
 			<< "multiaddress cout:" << task_content.addr_cout\
-			<< "address:" << multi_addr);
+			<< "address:" << multi_addr<< "thread id:" << std::this_thread::get_id());
 	}
 }
 

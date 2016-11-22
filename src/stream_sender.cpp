@@ -146,7 +146,7 @@ void StreamSender::_do_send_task_ext()
 	TSSendUnlimitQueueType *ts_data_queue = nullptr;
 	if (stream_receiver_)
 	{
-		stream_receiver_->get_unlimit_queue(ts_data_queue);
+		//stream_receiver_->get_unlimit_queue(ts_data_queue);
 	}
 	bool is_first_send = false;
 	TS_SEND_CONTENT ts_send_content;
@@ -177,11 +177,10 @@ void StreamSender::_do_send_task_ext()
 			{
 				udp_sender_ptr->write_ext(ts_send_content.content\
 					, ts_send_content.real_size\
-					, ts_send_content.need_time\
 					, item.second.ip\
 					, item.second.port);
 			}
-			all_need_time += ts_send_content.need_time;
+			//all_need_time += ts_send_content.need_time;
 			//success_time = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 			//success_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 			success_time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
@@ -256,9 +255,11 @@ void StreamSender::_write_content_to_file(const string &file_name, const char* d
 void StreamSender::_do_send_task()
 {
 	TSSendUnlimitQueueType *ts_data_queue = nullptr;
+	TSSendSpscQueueType *ts_spsc_data_queue = nullptr;
 	if (stream_receiver_)
 	{
-		stream_receiver_->get_unlimit_queue(ts_data_queue);
+		//stream_receiver_->get_unlimit_queue(ts_data_queue);
+		stream_receiver_->get_send_queue(ts_spsc_data_queue);
 	}
 	bool is_first_send = false;
 	TS_SEND_CONTENT ts_send_content;
@@ -272,7 +273,7 @@ void StreamSender::_do_send_task()
 	int64_t all_need_time = 0;
 	int64_t cur_time_count = 0;
 	int64_t send_start_time = 0;
-	std::cout << "send ts task pid:" << std::this_thread::get_id() << std::endl;
+	vvlog_i("doing send ts task cmd:" << receive_url_ << "pid:" << std::this_thread::get_id());
 
 	int64_t start_time = 0;
 	int64_t cur_time = 0;
@@ -295,16 +296,17 @@ void StreamSender::_do_send_task()
 			std::this_thread::sleep_for(std::chrono::milliseconds(10));
 			continue;
 		}
-		if(ts_data_queue->pop(ts_send_content))
+		//if(ts_data_queue->pop(ts_send_content))
+		if (ts_spsc_data_queue->pop(ts_send_content))
 		{
 			//std::cout << "pop success" << std::endl;
-			if (0 < delay_time)
-			{
-				std::call_once(delay_flag_, [&]() 
-				{
-					std::this_thread::sleep_for(std::chrono::seconds(delay_time));
-				});
-			}
+			//if (0 < delay_time)
+			//{
+			//	std::call_once(delay_flag_, [&]() 
+			//	{
+			//		std::this_thread::sleep_for(std::chrono::seconds(delay_time));
+			//	});
+			//}
 			if (ts_send_content.is_real_pcr && !is_first)
 			{
 				start_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
@@ -327,7 +329,6 @@ void StreamSender::_do_send_task()
 			{
 				udp_sender_ptr->write_ext(ts_send_content.content\
 					, ts_send_content.real_size\
-					, ts_send_content.need_time\
 					, item.second.ip\
 					, item.second.port);
 				//std::cout << "multi send len" << ts_send_content.real_size << std::endl;

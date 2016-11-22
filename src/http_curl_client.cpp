@@ -97,7 +97,7 @@ int HttpCurlClient::get(const std::string &url, const int &timeout_ms /*= 5000/*
 			}
 			else
 			{
-				std::cout << "url:" << url << "time:" << total_time << std::endl;
+				//std::cout << "url:" << url << "time:" << total_time << std::endl;
 			}
 		}
 		is_data_ = false;

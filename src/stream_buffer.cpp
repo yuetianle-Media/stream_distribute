@@ -29,13 +29,19 @@ int StreamBuffer::pushToBuffer(const char *content, const int &size)
 bool StreamBuffer::pop_data(char *dest, const int &dest_len, const int &data_len)
 {
 	v_lock(lk, mtx_data_);
-	if (is_empty())
+	while (data_size_ >= 188*3)
 	{
-		return false;
+		if (data_content_[0] == 0x47 && data_content_[188] == 0x47 && data_content_[188 * 2] == 0x47)
+		{
+			break;
+		}
+		memmove(data_content_, data_content_+1, data_size_ - 1);
+		data_size_ -= 1;
+		current_index_ -= 1;
 	}
 	if (data_content_[0] != 0x47)
 	{
-		assert(false);
+		return false;
 	}
 	//将代取出的数据拷贝出去
 	if (dest && dest_len >= data_len &&data_size_ >= data_len)

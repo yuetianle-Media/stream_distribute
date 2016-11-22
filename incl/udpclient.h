@@ -19,8 +19,7 @@ public:
 
 	int sync_write(char *data, const long &data_size, const string &ip, const long &port);
 	int write_ext(char *data, const long int &data_len\
-		, const double &need_time, const string &remote_addr\
-		, const int &remote_port);
+		, const string &remote_addr, const int &remote_port);
 	int write(char *data, const int &data_len);
 	int write(char *data, const int &data_len, const double &need_time);
 	int receive(const int &data_len=0);

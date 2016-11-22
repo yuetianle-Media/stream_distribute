@@ -134,18 +134,24 @@ int RuleManager::_get_add_task(TASKCONTENTLIST &add_task_list, RULECONTENTTYPE &
 
 int RuleManager::_push_add_task(const TASKCONTENTLIST &add_task_list)
 {
+	ostringstream out_stream;
 	if (!add_task_list.empty())
-		cout << "add list:" << std::endl;
+		out_stream << "add list:" << std::endl;
 	for (auto item : add_task_list)
 	{
 		//task_list_.push(item);
 		add_task_signal_(item);
-		cout << "url:" << item.url << "cout:" << item.addr_cout << std::endl;
+		out_stream << "url:" << item.url << "cout:" << item.addr_cout << std::endl;
+		//vvlog_i("url:" << item.url << "cout:" << item.addr_cout);
 		for (int index = 0; index < item.addr_cout; index++)
 		{
-			cout << "ip:" << item.remote_addr_list[index].ip << "port:" << item.remote_addr_list[index].port << std::endl;
+			out_stream << "ip:" << item.remote_addr_list[index].ip << "port:" << item.remote_addr_list[index].port << std::endl;
+			//vvlog_i("ip:" << item.remote_addr_list[index].ip << "port:" << item.remote_addr_list[index].port);
 		}
 	}
+	string out_str = out_stream.str();
+	if (!out_str.empty())
+		vvlog_i(out_str);
 	return E_OK;
 }
 
@@ -214,7 +220,7 @@ int RuleManager::_push_del_task(const TASKCONTENTLIST &del_task_list)
 
 void RuleManager::_do_task_ext()
 {
-	std::cout << "rule manager task pid:" << this_thread::get_id() << std::endl;
+	vvlog_i("doing back process config file:" << config_file_name_ << "pid:" << std::this_thread::get_id());
 	while (1)
 	{
 		if (b_exit_)
@@ -278,10 +284,11 @@ void RuleManager::_start_task(const int interveral/*=5*/)
 		return;
 	}
 	task_.reset(new thread(std::bind(&RuleManager::_do_task_ext, this)));
-	//if (task_)
-	//{
-	//	task_->detach();
-	//}
+	if (task_)
+	{
+		vvlog_i("start process config file:" << config_file_name_ << " pid:" << std::this_thread::get_id());
+		//task_->detach();
+	}
 }
 
 void RuleManager::_stop_task()

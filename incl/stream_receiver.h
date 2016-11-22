@@ -64,8 +64,9 @@ public:
 
 	int start();
 	void stop();
-	//bool get_send_queue(TSSendQueueType *&send_queue) { send_queue = &ts_send_content_queue_; return true; }
-	bool get_unlimit_queue(TSSendUnlimitQueueType *&unlimit_queue) { unlimit_queue = &ts_send_unmlimt_queue_; return true; }
+	//bool get_send_queue(TSSendQueueType *&send_queue) { send_queue = &ts_send_queue_; return true; }
+	bool get_send_queue(TSSendSpscQueueType *&send_queue) { send_queue = &ts_send_queue_; return true; }
+	//bool get_unlimit_queue(TSSendUnlimitQueueType *&unlimit_queue) { unlimit_queue = &ts_send_unmlimt_queue_; return true; }
 public:
     /**
      * @brief subcribe_ts_callback 订阅ts流数据.
@@ -93,7 +94,7 @@ private:
 	int _do_m3u8_task();
 
 	int _do_m3u8_task_boost();
-	int _do_m3u8_task_group(const std::string &play_stream, const long int play_duration/*unit:s*/);
+	//int _do_m3u8_task_group(const std::string &play_stream, const long int play_duration/*unit:s*/);
 
 	int _send_m3u8_cmd(const std::string &m3u8_cmd);
 
@@ -170,9 +171,10 @@ private:
 	StreamBuffer receive_ts_buffer_;
 	TSPacketSpscQueueType ts_spsc_packet_queue;
 
-	TSSendUnlimitQueueType ts_send_unmlimt_queue_;
-	TSTaskGroup ts_task_group_;
-	ThreadPool ts_task_pool_;
+	TSSendSpscQueueType ts_send_queue_;
+	//TSSendUnlimitQueueType ts_send_unmlimt_queue_;
+	//TSTaskGroup ts_task_group_;
+	//ThreadPool ts_task_pool_;
 
 	std::shared_ptr<boost::asio::io_service> io_svt_;
 	std::shared_ptr<boost::asio::io_service::work> worker_;

@@ -8,7 +8,7 @@ StreamReceiver::StreamReceiver(const string &url)
 	, m3u8_thrd_ptr_(nullptr), ts_thrd_ptr_(nullptr), parse_ts_thrd_(nullptr)\
 	, b_exit_m3u8_task_(false), b_exit_ts_task_(false), b_exit_parse_task_(false)\
 	, ts_file_index_(0), uri_(url), receive_ts_buffer_(TS_PACKET_LENGTH_STANDARD*7*400)\
-	, ts_send_unmlimt_queue_(1024*50), play_stream_count_(0), ts_task_pool_(4)\
+	, /*ts_send_queue_(512), ts_send_unmlimt_queue_(1024*50),*/ play_stream_count_(0)/*, ts_task_pool_(4)*/\
 	, io_svt_(std::make_shared<boost::asio::io_service>()), strand_(*io_svt_)
 {
 	worker_ = std::make_shared<boost::asio::io_service::work>(*io_svt_);
@@ -40,13 +40,13 @@ StreamReceiver::~StreamReceiver()
 			;
 		});
 	}
-	if (!ts_send_unmlimt_queue_.empty())
-	{
-		ts_send_unmlimt_queue_.consume_all([](TSSENDCONTENT item)
-		{
-			;
-		});
-	}
+	//if (!ts_send_unmlimt_queue_.empty())
+	//{
+	//	ts_send_unmlimt_queue_.consume_all([](TSSENDCONTENT item)
+	//	{
+	//		;
+	//	});
+	//}
 }
 
 int StreamReceiver::start()
@@ -68,8 +68,8 @@ int StreamReceiver::start()
 	}
 	//m3u8_thrd_ptr_.reset(new std::thread(std::bind(&StreamReceiver::_do_m3u8_task, this)));
 	m3u8_thrd_ptr_.reset(new std::thread(std::bind(&StreamReceiver::_do_m3u8_task_boost, this)));
-	//ts_thrd_ptr_.reset(new std::thread(std::bind(&StreamReceiver::_do_ts_task, this)));
-	ts_thrd_ptr_.reset(new std::thread(std::bind(&StreamReceiver::_do_ts_task_boost, this)));
+	ts_thrd_ptr_.reset(new std::thread(std::bind(&StreamReceiver::_do_ts_task, this)));
+	//ts_thrd_ptr_.reset(new std::thread(std::bind(&StreamReceiver::_do_ts_task_boost, this)));
 	//parse_ts_thrd_.reset(new thread(std::bind(&StreamReceiver::_do_parse_ts_data, this)));
 	parse_ts_thrd_.reset(new std::thread(std::bind(&StreamReceiver::_do_parse_ts_data_ext, this)));
 	if (m3u8_thrd_ptr_ && ts_thrd_ptr_ && parse_ts_thrd_)
@@ -77,13 +77,12 @@ int StreamReceiver::start()
 		//m3u8_thrd_ptr_->detach();
 		//ts_thrd_ptr_->detach();
 		//parse_ts_thrd_->detach();
-		int concurrency = m3u8_thrd_ptr_->hardware_concurrency();
-		vvlog_i("start receive stream success url:" << uri_);
+		vvlog_i("start receive stream success url:" << uri_ << " pid:" << this_thread::get_id());
 		return E_OK;
 	}
 	else
 	{
-		vvlog_e("start receive stream fail url:" << uri_);
+		vvlog_e("start receive stream fail url:" << uri_ << " pid:" << this_thread::get_id());
 		return E_PARAM_ERROR;
 	}
 }
@@ -265,8 +264,8 @@ int StreamReceiver::_send_ts_cmd_boost(const std::string &ts_cmd)
 			try
 			{
 				std::string ts_data = ts_response.body();
-				//int data_size = _push_ts_data_to_queue(ts_data);
-				vvlog_i("send ts cmd:" << ts_cmd\
+				int data_size = _push_ts_data_to_queue(ts_data);
+				//vvlog_i("send ts cmd:" << ts_cmd\
 					<< " size:" << ts_data.length()\
 					<< "pid:" << std::this_thread::get_id());
 				ts_data.clear();
@@ -311,6 +310,7 @@ int StreamReceiver::_push_ts_data_to_queue(string &ts_data)
 		{
 			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 		}
+		//memset(&one_ts_data, 0, sizeof(one_ts_data));
 	}
 	if (0 < data_size)
 	{
@@ -415,7 +415,7 @@ void StreamReceiver::tsCallback(char *data, const long int &data_len, const bool
 		{
 			assert(false);
 		}
-		while (TS_PACKET_LENGTH_STANDARD <= receive_ts_buffer_.data_len())
+		while (TS_PACKET_LENGTH_STANDARD*3 <= receive_ts_buffer_.data_len())
 		{
 			TS_PACKET_CONTENT one_ts_data;
 			if (receive_ts_buffer_.pop_data(one_ts_data.content, TS_PACKET_LENGTH_STANDARD, TS_PACKET_LENGTH_STANDARD))
@@ -495,7 +495,7 @@ int StreamReceiver::_do_m3u8_task()
 
 int StreamReceiver::_do_m3u8_task_boost()
 {
-	std::cout << "m3u8Task pid:" << std::this_thread::get_id() << std::endl;
+	vvlog_i("doing m3u8 task cmd:" << play_stream_ << "pid" << std::this_thread::get_id());
 	boost::asio::steady_timer wait_timer(*io_svt_);
 	boost::network::http::client::request m3u8_request;
 	boost::network::http::client::response m3u8_response;
@@ -590,70 +590,70 @@ int StreamReceiver::_do_m3u8_task_boost()
 	return 0;
 }
 
-int StreamReceiver::_do_m3u8_task_group(const string & play_stream, const long int play_duration)
-{
-	auto self = shared_from_this();
-	if (0 < play_stream_list_.size())
-	{
-		for (auto play_stream : play_stream_list_)
-		{
-			auto task_thread = std::make_shared<std::thread>(std::bind([&]() 
-			{
-				int play_duration = 0;
-				std::string m3u8_content;
-				auto http_client = std::make_shared<HttpCurlClient>();
-				//TSTaskType ts_task_queue(1000);
-				std::shared_ptr<TSTaskType> ts_queue_ptr = std::make_shared<TSTaskType>(1000);
-				ts_task_group_.insert(std::make_pair(play_stream.first, ts_queue_ptr));
-				std::map<std::string, std::string> all_ts_task;
-				http_client->subscribe_data([&](char* data, const long &data_len, const bool &is_finished)->void 
-				{
-					m3u8_content.append(data, data_len);
-					if (is_finished)
-					{
-						m3u8_content.append(data, data_len);
-						M3u8Parser parser(play_stream.second, m3u8_content);
-						if (!parser.is_variant_play_list())//单个视频流
-						{
-							play_duration = parser.get_max_duration();
-							M3U8SegmentList *segment_list = nullptr;
-							if (parser.get_segments(segment_list) && segment_list)
-							{
-								for (auto segment : *segment_list)
-								{
-									std::string ts_cmd_str = segment.uri;
-									HTTPTSCMD ts_cmd;
-									memcpy(ts_cmd.cmd, ts_cmd_str.data(), segment.uri.length());
-									ts_cmd.cmd_length = ts_cmd_str.length();
-									std::map<string, string>::iterator iter = all_ts_task.find(ts_cmd_str);
-									if (iter == all_ts_task.end())//此任务没有添加过
-									{
-										boost::posix_time::ptime now = boost::posix_time::second_clock::local_time();
-										std::string cur_time = boost::posix_time::to_iso_string(now);
-										all_ts_task.insert(std::make_pair(ts_cmd_str, cur_time));
-										ts_queue_ptr->push(ts_cmd);
-									}
-									//将当前10分钟之前的task从map中删除掉
-								}
-							}
-						}
-						m3u8_content.clear();
-					}
-				});
-				while (1)
-				{
-					http_client->get(play_stream.second);
-					std::this_thread::sleep_for(std::chrono::seconds(play_duration));
-				}
-			}));
-		}
-	}
-	return 0;
-}
+//int StreamReceiver::_do_m3u8_task_group(const string & play_stream, const long int play_duration)
+//{
+//	auto self = shared_from_this();
+//	if (0 < play_stream_list_.size())
+//	{
+//		for (auto play_stream : play_stream_list_)
+//		{
+//			auto task_thread = std::make_shared<std::thread>(std::bind([&]() 
+//			{
+//				int play_duration = 0;
+//				std::string m3u8_content;
+//				auto http_client = std::make_shared<HttpCurlClient>();
+//				//TSTaskType ts_task_queue(1000);
+//				std::shared_ptr<TSTaskType> ts_queue_ptr = std::make_shared<TSTaskType>(1000);
+//				ts_task_group_.insert(std::make_pair(play_stream.first, ts_queue_ptr));
+//				std::map<std::string, std::string> all_ts_task;
+//				http_client->subscribe_data([&](char* data, const long &data_len, const bool &is_finished)->void 
+//				{
+//					m3u8_content.append(data, data_len);
+//					if (is_finished)
+//					{
+//						m3u8_content.append(data, data_len);
+//						M3u8Parser parser(play_stream.second, m3u8_content);
+//						if (!parser.is_variant_play_list())//单个视频流
+//						{
+//							play_duration = parser.get_max_duration();
+//							M3U8SegmentList *segment_list = nullptr;
+//							if (parser.get_segments(segment_list) && segment_list)
+//							{
+//								for (auto segment : *segment_list)
+//								{
+//									std::string ts_cmd_str = segment.uri;
+//									HTTPTSCMD ts_cmd;
+//									memcpy(ts_cmd.cmd, ts_cmd_str.data(), segment.uri.length());
+//									ts_cmd.cmd_length = ts_cmd_str.length();
+//									std::map<string, string>::iterator iter = all_ts_task.find(ts_cmd_str);
+//									if (iter == all_ts_task.end())//此任务没有添加过
+//									{
+//										boost::posix_time::ptime now = boost::posix_time::second_clock::local_time();
+//										std::string cur_time = boost::posix_time::to_iso_string(now);
+//										all_ts_task.insert(std::make_pair(ts_cmd_str, cur_time));
+//										ts_queue_ptr->push(ts_cmd);
+//									}
+//									//将当前10分钟之前的task从map中删除掉
+//								}
+//							}
+//						}
+//						m3u8_content.clear();
+//					}
+//				});
+//				while (1)
+//				{
+//					http_client->get(play_stream.second);
+//					std::this_thread::sleep_for(std::chrono::seconds(play_duration));
+//				}
+//			}));
+//		}
+//	}
+//	return 0;
+//}
 
 int StreamReceiver::_do_ts_task()
 {
-	std::cout << "one ts task pid:" << std::this_thread::get_id() << std::endl;
+	vvlog_i("doing ts task cmd:" << play_stream_ << "pid:" << std::this_thread::get_id());
     while (1) 
 	{
 		if (b_exit_ts_task_)
@@ -666,9 +666,9 @@ int StreamReceiver::_do_ts_task()
 			{
 				return;
 			}
-			vvlog_i("send ts start cmd:" << ts_cmd.cmd);
+			//vvlog_i("send ts start cmd:" << ts_cmd.cmd);
 			_send_ts_cmd(ts_cmd.cmd);
-			vvlog_i("send ts end cmd:" << ts_cmd.cmd);
+			//vvlog_i("send ts end cmd:" << ts_cmd.cmd);
 		});
 		//HTTPTSCMD ts_cmd_struct;
 		//while (ts_task_list_.pop(ts_cmd_struct))
@@ -698,61 +698,29 @@ int StreamReceiver::_do_ts_task_boost()
 			break;
 		}
 
-		//ts_task_list_.consume_all([&](HTTPTSCMD ts_cmd)
-		//{
-		//	if (b_exit_ts_task_)
-		//	{
-		//		return;
-		//	}
-		//	vvlog_i("send ts start cmd:" << ts_cmd.cmd << "pid:" << std::this_thread::get_id());
-		//	_send_ts_cmd_boost(ts_cmd.cmd);
-		//	vvlog_i("send ts end cmd:" << ts_cmd.cmd << "pid:" << std::this_thread::get_id());
-		//});
-		ts_task_pool_.enqueue([&]()
+		ts_task_list_.consume_all([&](HTTPTSCMD ts_cmd)
 		{
-			ts_task_list_.consume_all([&](HTTPTSCMD ts_cmd)
+			if (b_exit_ts_task_)
 			{
-				if (b_exit_ts_task_)
-				{
-					return;
-				}
-				//vvlog_i("send ts start cmd:" << ts_cmd.cmd << "pid:" << std::this_thread::get_id());
-				_send_ts_cmd_boost(ts_cmd.cmd);
-				//vvlog_i("send ts end cmd:" << ts_cmd.cmd << "pid:" << std::this_thread::get_id());
-			});
+				return;
+			}
+			vvlog_i("send ts start cmd:" << ts_cmd.cmd << "pid:" << std::this_thread::get_id());
+			_send_ts_cmd_boost(ts_cmd.cmd);
+			vvlog_i("send ts end cmd:" << ts_cmd.cmd << "pid:" << std::this_thread::get_id());
 		});
-		//int task_count = 2;
-		//while (0 < task_count)
+		//ts_task_pool_.enqueue([&]()
 		//{
-		//	--task_count;
-		//	ts_task_pool_.enqueue([&]()
+		//	ts_task_list_.consume_all([&](HTTPTSCMD ts_cmd)
 		//	{
-		//		ts_task_list_.consume_all([&](HTTPTSCMD ts_cmd)
+		//		if (b_exit_ts_task_)
 		//		{
-		//			if (b_exit_ts_task_)
-		//			{
-		//				return;
-		//			}
-		//			//vvlog_i("send ts start cmd:" << ts_cmd.cmd << "pid:" << std::this_thread::get_id());
-		//			_send_ts_cmd_boost(ts_cmd.cmd);
-		//			//vvlog_i("send ts end cmd:" << ts_cmd.cmd << "pid:" << std::this_thread::get_id());
-		//		});
+		//			return;
+		//		}
+		//		//vvlog_i("send ts start cmd:" << ts_cmd.cmd << "pid:" << std::this_thread::get_id());
+		//		_send_ts_cmd_boost(ts_cmd.cmd);
+		//		//vvlog_i("send ts end cmd:" << ts_cmd.cmd << "pid:" << std::this_thread::get_id());
 		//	});
-		//}
-		//std::cout << "data size:" << ts_callback.ts_data.size();
-		//HTTPTSCMD ts_cmd_struct;
-		//while (ts_task_list_.pop(ts_cmd_struct))
-		//{
-		//	if (b_exit_ts_task_)
-		//	{
-		//		break;
-		//	}
-		//	//vvlog_i("send ts start url:" << ts_cmd_struct.cmd << "no task count:" << no_task_time_count);
-		//	//auto result = ts_task_pool_.enqueue(std::bind(&StreamReceiver::_send_ts_cmd, this, ts_cmd_struct.cmd));
-		//	//result.get();
-		//	//vvlog_i("send ts end url:" << ts_cmd_struct.cmd);
-		//	_send_ts_cmd(ts_cmd_struct.cmd);
-		//}
+		//});
         std::this_thread::sleep_for(std::chrono::nanoseconds(1));
     }
 	return E_OK;
@@ -944,7 +912,7 @@ void StreamReceiver::_do_parse_ts_data_ext()
 	long int pcr_end = 0;
 	long int max_pcr = 0;
 	bool is_find_first_pcr = false;
-	std::cout << "parse ts task:" << std::this_thread::get_id() <<std::endl;
+	vvlog_i("doing parse ts task cmd:" << play_stream_ << "pid:" << std::this_thread::get_id());
 	int push_count = 0;
 	while (1)
 	{
@@ -984,7 +952,15 @@ void StreamReceiver::_do_parse_ts_data_ext()
 						ts_send_content.is_real_pcr = true;
 					}
 					//std::cout << "push ts" << std::endl;
-					ts_send_unmlimt_queue_.push(ts_send_content);
+					while (1 > ts_send_queue_.write_available())
+					{
+						std::this_thread::sleep_for(std::chrono::milliseconds(100));
+					}
+					if (!ts_send_queue_.push(ts_send_content))
+					{
+						std::cout << "push ts data faile" << std::endl;
+					}
+					//ts_send_unmlimt_queue_.push(ts_send_content);
 					ts_packet_num = 0;
 					sender_buffer.reset_buffer();
 				}
@@ -1015,7 +991,7 @@ void StreamReceiver::_push_ts_data_to_send_queue(char *data, const long int &dat
 	while (TS_SEND_SIZE <= tmp_data_len)
 	{
 		memcpy(ts_send_content.content, tmp_data, TS_SEND_SIZE);
-		ts_send_content.need_time = need_time;
+		//ts_send_content.need_time = need_time;
 		ts_send_content.real_size = TS_SEND_SIZE;
 		if (tmp_data_len == TS_SEND_SIZE)
 		{
@@ -1023,10 +999,10 @@ void StreamReceiver::_push_ts_data_to_send_queue(char *data, const long int &dat
 		}
 		try {
 			//if (!ts_send_unmlimt_queue_.bounded_push(ts_send_content))
-			if (!ts_send_unmlimt_queue_.push(ts_send_content))
-			{
-				std::cout << "push send content fail" << std::endl;
-			}
+			//if (!ts_send_unmlimt_queue_.push(ts_send_content))
+			//{
+			//	std::cout << "push send content fail" << std::endl;
+			//}
 		}
 		catch (std::exception e)
 		{
@@ -1049,16 +1025,16 @@ void StreamReceiver::_push_ts_data_to_send_queue(char *data, const long int &dat
 	if (0 < tmp_data_len)
 	{
 		memcpy(ts_send_content.content, tmp_data, tmp_data_len);
-		ts_send_content.need_time = (tmp_data_len*need_time) / (TS_SEND_SIZE);
+		//ts_send_content.need_time = (tmp_data_len*need_time) / (TS_SEND_SIZE);
 		ts_send_content.real_size = tmp_data_len;
 		ts_send_content.is_real_pcr = true;
 		try
 		{
 			//if (!ts_send_unmlimt_queue_.bounded_push(ts_send_content))
-			if (!ts_send_unmlimt_queue_.push(ts_send_content))
-			{
-				std::cout << "push send content fail" << std::endl;
-			}
+			//if (!ts_send_unmlimt_queue_.push(ts_send_content))
+			//{
+			//	std::cout << "push send content fail" << std::endl;
+			//}
 		}
 		catch (std::exception e)
 		{

@@ -13,11 +13,11 @@ typedef struct TS_SEND_CONTENT
 {
 	char content[TS_SEND_SIZE];
 	int real_size;
-	double need_time;
+	//double need_time;
 	PCR cur_pcr;
 	bool is_real_pcr;
 	TS_SEND_CONTENT()
-		:real_size(0), need_time(0), cur_pcr(0), is_real_pcr(false)
+		:real_size(0)/*, need_time(0)*/, cur_pcr(0), is_real_pcr(false)
 	{
 		memset(content, 0, sizeof(TS_SEND_SIZE));
 	}
