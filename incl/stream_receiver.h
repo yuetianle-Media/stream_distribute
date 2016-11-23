@@ -111,6 +111,8 @@ private:
 	*/
 	int _remove_ts_cmd(const long int time_second);
 
+	int _do_ts_task_group();
+
 	int _do_ts_task();
 
 	int _do_ts_task_boost();
@@ -182,6 +184,9 @@ private:
 
 	boost::network::http::client m3u8_boost_http_client_;
 	boost::network::http::client ts_boost_http_client_;
+
+	std::condition_variable ts_data_condition_;
+	std::once_flag ts_data_flag_;
 };
 
 typedef std::shared_ptr<StreamReceiver> StreamReceiverPtr;

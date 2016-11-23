@@ -1,6 +1,9 @@
 #include "stdafx.h"
 #include "stream_receiver.h"
-
+#include <boost/lexical_cast.hpp>
+#include <boost/uuid/uuid.hpp>
+#include <boost/uuid/uuid_generators.hpp>
+#include <boost/uuid/uuid_io.hpp>
 
 
 StreamReceiver::StreamReceiver(const string &url)
@@ -16,9 +19,24 @@ StreamReceiver::StreamReceiver(const string &url)
 	ostringstream ss_out;
 	if (uri_parser_.is_ready())
 	{
+		boost::uuids::random_generator sgen;
+		boost::uuids::uuid uid = sgen();
+		std::string unique_str = boost::uuids::to_string(uid);
+		std::string cur_time = boost::posix_time::to_iso_string(boost::posix_time::second_clock::local_time());
+		std::string cur_date = boost::gregorian::to_iso_string(boost::gregorian::day_clock::local_day());
 		ss_out << uri_parser_.host() << "-" << uri_parser_.port() << "-";
-		ss_out << boost::posix_time::to_iso_string(boost::posix_time::second_clock::local_time()) << ".xml";
-		ts_task_file_name_ = ss_out.str();
+		ss_out << cur_time;
+		ss_out << "-" << unique_str << ".xml";
+		boost::filesystem::path ts_task_path = boost::filesystem::current_path();
+		ts_task_path /= "task";
+		ts_task_path /= cur_date;
+		if (!boost::filesystem::exists(ts_task_path))
+		{
+			boost::filesystem::create_directories(ts_task_path);
+		}
+		boost::filesystem::path whole_path = ts_task_path / ss_out.str();
+		ts_task_file_name_ = whole_path.string();
+		vvlog_i("cmd:" << play_stream_ << " ts tasks file name:" << ts_task_file_name_);
 	}
 	if (!uri_.empty())
 	{
@@ -66,13 +84,13 @@ int StreamReceiver::start()
 	{
 		ts_conn_ = ts_http_client_ptr_->subscribe_data(boost::bind(&StreamReceiver::tsCallback, this, _1, _2, _3));
 	}
-	//m3u8_thrd_ptr_.reset(new std::thread(std::bind(&StreamReceiver::_do_m3u8_task, this)));
-	m3u8_thrd_ptr_.reset(new std::thread(std::bind(&StreamReceiver::_do_m3u8_task_boost, this)));
-	ts_thrd_ptr_.reset(new std::thread(std::bind(&StreamReceiver::_do_ts_task, this)));
+	m3u8_thrd_ptr_.reset(new std::thread(std::bind(&StreamReceiver::_do_m3u8_task, this)));
+	//m3u8_thrd_ptr_.reset(new std::thread(std::bind(&StreamReceiver::_do_m3u8_task_boost, this)));
+	//ts_thrd_ptr_.reset(new std::thread(std::bind(&StreamReceiver::_do_ts_task, this)));
 	//ts_thrd_ptr_.reset(new std::thread(std::bind(&StreamReceiver::_do_ts_task_boost, this)));
 	//parse_ts_thrd_.reset(new thread(std::bind(&StreamReceiver::_do_parse_ts_data, this)));
-	parse_ts_thrd_.reset(new std::thread(std::bind(&StreamReceiver::_do_parse_ts_data_ext, this)));
-	if (m3u8_thrd_ptr_ && ts_thrd_ptr_ && parse_ts_thrd_)
+	//parse_ts_thrd_.reset(new std::thread(std::bind(&StreamReceiver::_do_parse_ts_data_ext, this)));
+	if (m3u8_thrd_ptr_ /*&& ts_thrd_ptr_ && parse_ts_thrd_*/)
 	{
 		//m3u8_thrd_ptr_->detach();
 		//ts_thrd_ptr_->detach();
@@ -390,6 +408,11 @@ void StreamReceiver::m3u8Callback(char *data, const long int &data_len, const bo
 					_push_ts_cmd_to_queue(segment.uri);
 					//将当前2分钟之前的task从map中删除掉
 					_remove_ts_cmd(M3U8TASKREMOVEINTERVAL);
+					//启动TS下载任务
+					if (!ts_thrd_ptr_)
+					{
+						ts_thrd_ptr_.reset(new std::thread(std::bind(&StreamReceiver::_do_ts_task, this)));
+					}
 				}
 			}
 		}
@@ -410,6 +433,14 @@ void StreamReceiver::tsCallback(char *data, const long int &data_len, const bool
 {
 	if (data && 0 < data_len)
 	{
+		//std::call_once(ts_data_flag_, [&]()
+		//{
+		//	ts_data_condition_.notify_all();
+		//});
+		if (!parse_ts_thrd_)
+		{
+			parse_ts_thrd_.reset(new std::thread(std::bind(&StreamReceiver::_do_parse_ts_data_ext, this)));
+		}
 		int push_result = receive_ts_buffer_.pushToBuffer(data, data_len);
 		if (E_OK != push_result)
 		{
@@ -455,7 +486,7 @@ void StreamReceiver::tsCallback(char *data, const long int &data_len, const bool
 
 int StreamReceiver::_do_m3u8_task()
 {
-	std::cout << "m3u8Task pid:" << std::this_thread::get_id() << std::endl;
+	vvlog_i("doing m3u8 task cmd:" << play_stream_ << "pid" << std::this_thread::get_id());
 	boost::asio::steady_timer wait_timer(*io_svt_);
     while (1) {
         if (b_exit_m3u8_task_)
@@ -470,14 +501,17 @@ int StreamReceiver::_do_m3u8_task()
 			}
 			//vvlog_i("send m3u8 start cmd:" << play_stream_);
             int result = _send_m3u8_cmd(play_stream_);
-			if (result != CURLE_OK)//请求失败或数据不正确
+			//if (result != CURLE_OK)//请求失败或数据不正确
+			//{
+			//	wait_timer.cancel();
+			//}
+			if (0 < play_stream_duration_)
 			{
-				std::this_thread::sleep_for(std::chrono::seconds(5));
-				wait_timer.cancel();
+				wait_timer.wait();
 			}
 			else
 			{
-				wait_timer.wait();
+				std::this_thread::sleep_for(std::chrono::seconds(5));
 			}
 			//vvlog_i("send m3u8 end cmd:" << play_stream_);
 			if (0 < play_stream_count_ && 0 < play_stream_list_.size())
@@ -1072,5 +1106,17 @@ int StreamReceiver::_remove_ts_cmd(const long int time_second)
 		ts_all_task_map_.erase(del_task);
 	}
 	return E_OK;
+}
+
+int StreamReceiver::_do_ts_task_group()
+{
+	while (1)
+	{
+		HTTPTSCMD ts_cmd;
+		if (ts_task_list_.pop(ts_cmd))
+		{
+
+		}
+	}
 }
 
