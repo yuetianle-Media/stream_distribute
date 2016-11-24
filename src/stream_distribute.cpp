@@ -43,9 +43,11 @@ int main(int argc, char **argv)
 	////const string cctv_6_h265 = "http://10.160.34.115:91/120/120.m3u8";
 	////const string found_uri = "http://58.20.59.58:8020/live/fazhilv.stream_aac/playlist.m3u8";
 	//const string var_rate_uri = "http://125.88.92.166:30001/PLTV/88888956/224/3221227724/1.m3u8";
+	//const string bug_uri = "http://125.88.92.166:30001/PLTV/88888956/224/3221227742/1.m3u8";
 	//test_stream_receive(found_uri);
 	//test_stream_receive(stream_uri);
 	//test_stream_receive(var_rate_uri);
+	//test_stream_receive(bug_uri);
 	//while (true)
 	//{
 	//	this_thread::sleep_for(std::chrono::seconds(5));

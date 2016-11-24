@@ -291,7 +291,7 @@ void StreamSender::_do_send_task()
 		cur_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 		int64_t time_cout = cur_time - start_time;
 		//if (time_cout < cur_cout / 27000)
-		if (time_cout < cur_cout / 90)
+		if (time_cout < (cur_cout / 90))
 		{
 			std::this_thread::sleep_for(std::chrono::milliseconds(10));
 			continue;
@@ -317,7 +317,9 @@ void StreamSender::_do_send_task()
 			if (ts_send_content.is_real_pcr)
 			{
 				//if ((ts_send_content.cur_pcr - cur_pcr) / 90 > 10000 || ts_send_content.cur_pcr < cur_pcr)
-				if ((ts_send_content.cur_pcr - cur_pcr) / 90 > 100 || ts_send_content.cur_pcr < cur_pcr)
+				//if ((ts_send_content.cur_pcr - cur_pcr) / 90 > 100 || ts_send_content.cur_pcr < cur_pcr)
+				//std::cout << "pcr duration:" << (ts_send_content.cur_pcr - cur_pcr) << "time:" <<(ts_send_content.cur_pcr - cur_pcr)/90 << std::endl;
+				if ((ts_send_content.cur_pcr - cur_pcr) / 90 > 1000 || ts_send_content.cur_pcr < cur_pcr)/*<< 时间间隔大于1S*/
 				{
 					first_pcr = ts_send_content.cur_pcr;
 					start_time = cur_time;

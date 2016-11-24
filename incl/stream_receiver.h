@@ -187,6 +187,8 @@ private:
 
 	std::condition_variable ts_data_condition_;
 	std::once_flag ts_data_flag_;
+	std::string cur_date_;
+	std::string unique_str_;
 };
 
 typedef std::shared_ptr<StreamReceiver> StreamReceiverPtr;

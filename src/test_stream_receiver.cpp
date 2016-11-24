@@ -69,7 +69,7 @@ void test_stream_receive(const std::string &url)
 	}));
 	//stream_receiver.subcribe_ts_callback(boost::bind(receive_ts_data,_1,_2, _3));
 	//Sleep(5000);
-	std::this_thread::sleep_for(std::chrono::seconds(60*10));
+	std::this_thread::sleep_for(std::chrono::seconds(60*3));
 	is_finished = true;
 	consume_task->join();
 	stream_receiver->stop();

@@ -21,15 +21,15 @@ StreamReceiver::StreamReceiver(const string &url)
 	{
 		boost::uuids::random_generator sgen;
 		boost::uuids::uuid uid = sgen();
-		std::string unique_str = boost::uuids::to_string(uid);
+		unique_str_ = boost::uuids::to_string(uid);
 		std::string cur_time = boost::posix_time::to_iso_string(boost::posix_time::second_clock::local_time());
-		std::string cur_date = boost::gregorian::to_iso_string(boost::gregorian::day_clock::local_day());
+		cur_date_ = boost::gregorian::to_iso_string(boost::gregorian::day_clock::local_day());
 		ss_out << uri_parser_.host() << "-" << uri_parser_.port() << "-";
 		ss_out << cur_time;
-		ss_out << "-" << unique_str << ".xml";
+		ss_out << "-" << unique_str_ << ".xml";
 		boost::filesystem::path ts_task_path = boost::filesystem::current_path();
 		ts_task_path /= "task";
-		ts_task_path /= cur_date;
+		ts_task_path /= cur_date_;
 		if (!boost::filesystem::exists(ts_task_path))
 		{
 			boost::filesystem::create_directories(ts_task_path);
@@ -773,7 +773,28 @@ void StreamReceiver::_write_ts_file_list(const string &out_file_name, const stri
 	{
 		time_attr.set_value(time.data());
 	}
-	ts_file_doc_.save_file(out_file_name.data(), "\t", pugi::encoding_utf8);
+	std::string cur_date = boost::gregorian::to_iso_string(boost::gregorian::day_clock::local_day());
+	if (cur_date != cur_date_)
+	{
+		ts_file_doc_.save_file(out_file_name.data(), "\t", pugi::encoding_utf8);
+		ts_file_doc_.reset();
+
+		cur_date_ = cur_date;
+		boost::filesystem::path ts_task_path = boost::filesystem::current_path();
+		ts_task_path /= "task";
+		ts_task_path /= cur_date_;
+		if (!boost::filesystem::exists(ts_task_path))
+		{
+			boost::filesystem::create_directories(ts_task_path);
+		}
+		ostringstream ss_out;
+		std::string cur_time = boost::posix_time::to_iso_string(boost::posix_time::second_clock::local_time());
+		ss_out << uri_parser_.host() << "-" << uri_parser_.port() << "-";
+		ss_out << cur_time;
+		ss_out << "-" << unique_str_ << ".xml";
+		boost::filesystem::path whole_path = ts_task_path / ss_out.str();
+		ts_task_file_name_ = whole_path.string();
+	}
 }
 
 void StreamReceiver::_write_content_to_file(const string &out_file_name, char *data, const int &data_len)

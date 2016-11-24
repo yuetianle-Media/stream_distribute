@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "test_udp_client.h"
+#define REAL_PCR 0 
 void test_udp_sync_client()
 {
 	std::shared_ptr<boost::asio::io_service> io_service = std::make_shared<boost::asio::io_service>();
@@ -169,13 +170,17 @@ void read_ts_func_ext()
 	//ss.open("20161107T100344.ts", ios::in | ios::binary);
 	//FILE* fd = fopen("20161107T100344.ts", "rb");
 
-	ss.open("20161115T114313.ts", ios::in | ios::binary);
-	FILE* fd = fopen("20161115T114313.ts", "rb");
+	//ss.open("20161115T114313.ts", ios::in | ios::binary);
+	//FILE* fd = fopen("20161115T114313.ts", "rb");
 #pragma endregion 定码率
 #pragma region 变码率
 	//ss.open("20161114T155306.ts", ios::in | ios::binary);
 	//FILE* fd = fopen("20161114T155306.ts", "rb");
 #pragma endregion 变码率
+#pragma region BugTs
+	ss.open("bug-65111.ts", ios::in | ios::binary);
+	FILE* fd = fopen("bug-65111.ts", "rb");
+#pragma endregion BugTs
 	if (!fd)
 	{
 		assert(false);
@@ -202,6 +207,10 @@ void read_ts_func_ext()
 			{
 				int result = sender_buffer_.push_to_buffer(ts_send_buffer, 188);
 				PCR packet_pcr = ts_packet_.Get_PCR();
+				if (ts_packet_.Get_discontinuity_indicator((BYTE*)ts_send_buffer))
+				{
+					std::cout << "discontinue pcr:" << packet_pcr << std::endl;
+				}
 				//int64_t packet_pcr_m = 0;
 				PCR packet_pcr_m = 0;
 				int packet_pid = 0;
@@ -215,8 +224,13 @@ void read_ts_func_ext()
 					if (packet_pcr != INVALID_PCR)
 					{
 						send_content.is_real_pcr = true;
-						//send_content.cur_pcr = packet_pcr;
+#if REAL_PCR
+						send_content.cur_pcr = packet_pcr;
+						//std::cout << "real pcr:" << packet_pcr << std::endl;
+#else
 						send_content.cur_pcr = packet_pcr_m;
+						//std::cout << "pcr:" << packet_pcr_m << std::endl;
+#endif
 					}
 					if (!ts_send_content_queue_.push(send_content))
 					{
@@ -271,9 +285,14 @@ void test_udp_client(const string &addr, const int &port)
 		{
 			PCR cur_cout = cur_pcr - first_pcr;
 			cur_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+			double need_time = (double)cur_cout / 27000;
 			int64_t time_cout = cur_time - start_time;
-			//if (time_cout < cur_cout / 27000)
+#if REAL_PCR
+			if (time_cout < (cur_cout / 27000))
+#else
+
 			if (time_cout < cur_cout / 90)
+#endif
 			{
 				//this_thread::sleep_for(std::chrono::milliseconds(10));
 				std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -291,8 +310,15 @@ void test_udp_client(const string &addr, const int &port)
 				if (ts_content.is_real_pcr)
 				{
 					//std::cout << "pcr:" << ts_content.cur_pcr << std::endl;
-					//if ((ts_content.cur_pcr - cur_pcr) / 90 > 10000 || ts_content.cur_pcr < cur_pcr)
-					if ((ts_content.cur_pcr - cur_pcr) / 90 > 100 || ts_content.cur_pcr < cur_pcr)
+#if REAL_PCR
+					PCR interval_cnt = ts_content.cur_pcr - cur_pcr;
+					//std::cout << "real pcr duration:" << interval_cnt << "time:" << (interval_cnt/27000)<< std::endl;
+					if ((ts_content.cur_pcr - cur_pcr) / 270 > 10000 || ts_content.cur_pcr < cur_pcr)
+#else
+					PCR interval_cnt = ts_content.cur_pcr - cur_pcr;
+					//std::cout << "real pcr duration:" << interval_cnt << "time:" << (interval_cnt/90)<< std::endl;
+					if ((ts_content.cur_pcr - cur_pcr) / 90 > 1000 || ts_content.cur_pcr < cur_pcr)
+#endif
 					{
 						first_pcr = ts_content.cur_pcr;
 						start_time = cur_time;
