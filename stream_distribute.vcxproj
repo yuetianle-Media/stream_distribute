@@ -60,43 +60,39 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
     <Import Project="boost.props" />
     <Import Project="curl.props" />
-    <Import Project="zeromq.props" />
-    <Import Project="cppnetlib.props" />
+    <Import Project="vot_logger.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
     <Import Project="boost.props" />
     <Import Project="curl.props" />
-    <Import Project="zeromq.props" />
-    <Import Project="cppnetlib.props" />
+    <Import Project="vot_logger.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
     <Import Project="boost.props" />
     <Import Project="curl.props" />
-    <Import Project="zeromq.props" />
-    <Import Project="cppnetlib.props" />
+    <Import Project="vot_logger.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
     <Import Project="boost.props" />
     <Import Project="curl.props" />
-    <Import Project="zeromq.props" />
-    <Import Project="cppnetlib.props" />
+    <Import Project="vot_logger.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
-    <OutDir>$(SolutionDir)..\__output</OutDir>
-    <IntDir>$(SolutionDir)..\__obj</IntDir>
+    <OutDir>$(SolutionDir)..\__output\$(Configuration)</OutDir>
+    <IntDir>$(SolutionDir)..\__obj\$(Configuration)</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
-    <OutDir>$(SolutionDir)..\__output</OutDir>
-    <IntDir>$(SolutionDir)..\__obj</IntDir>
+    <OutDir>$(SolutionDir)..\__output\$(Configuration)</OutDir>
+    <IntDir>$(SolutionDir)..\__obj\$(Configuration)</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
@@ -117,6 +113,10 @@
       <AdditionalLibraryDirectories>$(SolutionDir)..\__output</AdditionalLibraryDirectories>
       <AdditionalDependencies>ws2_32.lib;winmm.lib;wldap32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
+    <PostBuildEvent>
+      <Command>xcopy /cvYi $(curl_lib)\*.dll $(OutDir)
+xcopy /cvYi $(vot_logger_lib)\*.dll $(OutDir)</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -149,7 +149,12 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(SolutionDir)..\__output</AdditionalLibraryDirectories>
       <AdditionalDependencies>ws2_32.lib;winmm.lib;wldap32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
     </Link>
+    <PostBuildEvent>
+      <Command>xcopy /cvYi $(curl_lib)\*.dll $(OutDir)
+xcopy /cvYi $(vot_logger_lib)\*.dll $(OutDir)</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -195,7 +200,6 @@
     <ClInclude Include="incl\stream_sender.h" />
     <ClInclude Include="incl\stream_sender_buffer.h" />
     <ClInclude Include="incl\tcpclient.h" />
-    <ClInclude Include="incl\test_http_client.h" />
     <ClInclude Include="incl\test_http_curl_client.h" />
     <ClInclude Include="incl\test_m3u8_parser.h" />
     <ClInclude Include="incl\test_rule_manager.h" />
@@ -222,8 +226,12 @@
     </ClCompile>
     <ClCompile Include="src\pugixml.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">NotUsing</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="src\rule_manager.cpp" />
+    <ClCompile Include="src\rule_manager.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="src\socket_session.cpp" />
     <ClCompile Include="src\stream_buffer.cpp" />
     <ClCompile Include="src\stream_distribute.cpp" />
@@ -232,9 +240,6 @@
     <ClCompile Include="src\stream_sender.cpp" />
     <ClCompile Include="src\stream_sender_buffer.cpp" />
     <ClCompile Include="src\tcpclient.cpp" />
-    <ClCompile Include="src\test_http_client.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Use</PrecompiledHeader>
-    </ClCompile>
     <ClCompile Include="src\test_rule_manager.cpp" />
     <ClCompile Include="src\test_stream_receiver.cpp" />
     <ClCompile Include="src\test_udp_client.cpp" />

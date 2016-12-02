@@ -29,32 +29,6 @@ using namespace pugi;
 #endif
 #include "data_types_defs.h"
 
-#include <boost/network/protocol/http/client.hpp>
-//using namespace boost::network;
-
-
-typedef struct body_callback
-{
-	explicit body_callback(std::string &body):body(body)
-	{}
-	BOOST_NETWORK_HTTP_BODY_CALLBACK(operator(), range, error)
-	{
-		if (!error)
-		{
-			for (auto item : range)
-			{
-				ts_data.push_back(item);
-			}
-			//std::cout << "receive:" << boost::distance(range) << "bytes" << std::endl;
-		}
-			//body.append(boost::begin(range), boost::end(range));
-	}
-	std::vector<char> ts_data;
-	std::string &body;
-}BODY_CALLBACK;
-
-typedef std::vector<std::shared_ptr<boost::network::http::client::response>> RESPONSE_LIST_TYPE;
-
 #define ENABLE_OUT_PCR 0 
 class StreamReceiver :public std::enable_shared_from_this<StreamReceiver> //: boost::signals2::trackable
 {
@@ -93,16 +67,9 @@ private:
 
 	int _do_m3u8_task();
 
-	int _do_m3u8_task_boost();
-	//int _do_m3u8_task_group(const std::string &play_stream, const long int play_duration/*unit:s*/);
-
 	int _send_m3u8_cmd(const std::string &m3u8_cmd);
 
 	void m3u8Callback(char *data, const long int &data_len, const bool &is_finished);
-
-	std::string _make_down_ts_cmd(const std::string &ts_file);
-
-	bool _make_down_ts_cmd(HTTPTSCMD &ts_cmd, const std::string &ts_file);
 
 	int _push_ts_cmd_to_queue(const string &ts_cmd);
 
@@ -115,13 +82,10 @@ private:
 
 	int _do_ts_task();
 
-	int _do_ts_task_boost();
-
 	int _send_ts_cmd(const std::string &ts_cmd);
 
-	int _send_ts_cmd_boost(const std::string &ts_cmd);
-
 	int _push_ts_data_to_queue(string &ts_data);
+
 	void tsCallback(char *data, const long int &data_len, const bool&is_finished);
 
 	void _do_parse_ts_data();
@@ -174,16 +138,10 @@ private:
 	TSPacketSpscQueueType ts_spsc_packet_queue;
 
 	TSSendSpscQueueType ts_send_queue_;
-	//TSSendUnlimitQueueType ts_send_unmlimt_queue_;
-	//TSTaskGroup ts_task_group_;
-	//ThreadPool ts_task_pool_;
 
 	std::shared_ptr<boost::asio::io_service> io_svt_;
 	std::shared_ptr<boost::asio::io_service::work> worker_;
 	boost::asio::io_service::strand strand_;
-
-	boost::network::http::client m3u8_boost_http_client_;
-	boost::network::http::client ts_boost_http_client_;
 
 	std::condition_variable ts_data_condition_;
 	std::once_flag ts_data_flag_;

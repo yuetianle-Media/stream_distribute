@@ -10,7 +10,7 @@
 #include "test_stream_manager.h"
 #include "test_tcp_client.h"
 #include "test_m3u8_parser.h"
-//#include "test_http_client.h"
+#include "version.h"
 extern void test_rule_manager(const std::string &config_file);
 extern void test_stream_receive(const std::string &url);
 extern void test_stream_sender(const string &url, const string &multi_server, const int &port);
@@ -19,10 +19,8 @@ extern void test_http_curl_client();
 extern void test_stream_manager(const string &config_file);
 extern void test_stream_ts_callback(const std::string &ts_file_name);
 extern void test_m3u8_content_parser();
-//extern void test_http_client();
 int main(int argc, char **argv)
 {
-	//test_http_client();
 	//test_m3u8_content_parser();
 	//while (true)
 	//{

@@ -7,7 +7,7 @@
 
 
 StreamReceiver::StreamReceiver(const string &url)
-	:ts_task_list_(5000), uri_parser_(url), play_stream_duration_(0)\
+	:ts_task_list_(10000), uri_parser_(url), play_stream_duration_(0)\
 	, m3u8_thrd_ptr_(nullptr), ts_thrd_ptr_(nullptr), parse_ts_thrd_(nullptr)\
 	, b_exit_m3u8_task_(false), b_exit_ts_task_(false), b_exit_parse_task_(false)\
 	, ts_file_index_(0), uri_(url), receive_ts_buffer_(TS_PACKET_LENGTH_STANDARD*7*400)\
@@ -85,16 +85,9 @@ int StreamReceiver::start()
 		ts_conn_ = ts_http_client_ptr_->subscribe_data(boost::bind(&StreamReceiver::tsCallback, this, _1, _2, _3));
 	}
 	m3u8_thrd_ptr_.reset(new std::thread(std::bind(&StreamReceiver::_do_m3u8_task, this)));
-	//m3u8_thrd_ptr_.reset(new std::thread(std::bind(&StreamReceiver::_do_m3u8_task_boost, this)));
-	//ts_thrd_ptr_.reset(new std::thread(std::bind(&StreamReceiver::_do_ts_task, this)));
-	//ts_thrd_ptr_.reset(new std::thread(std::bind(&StreamReceiver::_do_ts_task_boost, this)));
-	//parse_ts_thrd_.reset(new thread(std::bind(&StreamReceiver::_do_parse_ts_data, this)));
-	//parse_ts_thrd_.reset(new std::thread(std::bind(&StreamReceiver::_do_parse_ts_data_ext, this)));
-	if (m3u8_thrd_ptr_ /*&& ts_thrd_ptr_ && parse_ts_thrd_*/)
+	if (m3u8_thrd_ptr_ )
 	{
 		//m3u8_thrd_ptr_->detach();
-		//ts_thrd_ptr_->detach();
-		//parse_ts_thrd_->detach();
 		vvlog_i("start receive stream success url:" << uri_ << " pid:" << this_thread::get_id());
 		return E_OK;
 	}
@@ -199,27 +192,6 @@ bool StreamReceiver::_make_m3u8_cmd(HTTPM3U8CMD & m3u8_cmd, const std::string & 
 	}
 }
 
-std::string StreamReceiver::_make_down_ts_cmd(const string &ts_file)
-{
-	std::stringstream ss;
-	boost::filesystem::path ts_path(uri_parser_.uri());
-	ts_path.remove_filename();
-	std::string ts_uri = ts_path.string() + "/" + ts_file;
-	/*URIParser ts_uri_parser(ts_uri);
-	ss << "GET " << "/" << ts_uri_parser.resource_path() << " HTTP/1.1" << "\r\n"\
-		<< "Host: " << ts_uri_parser.host() << ":" << ts_uri_parser.port() << " \r\n"\
-		<< "User-Agent: " << "me-test" << "\r\n"\
-		<< "Accept: " << "test/html,application/xhtml+xml,application/xml" << "\r\n"\
-		<< "Connection: " << "keep-alive" << "\r\n\r\n";
-		*/
-	return ts_uri;
-}
-
-bool StreamReceiver::_make_down_ts_cmd(HTTPTSCMD &ts_cmd, const std::string &ts_file)
-{
-	return true;
-}
-
 int StreamReceiver::_send_m3u8_cmd(const string &m3u8_cmd)
 {
 	int result = E_OK;
@@ -265,46 +237,6 @@ int StreamReceiver::_send_ts_cmd(const string &ts_cmd)
 			//std::cout << "send ts cmd:" << ts_cmd << "success" << std::endl;
 		}
     }
-	return result;
-}
-
-int StreamReceiver::_send_ts_cmd_boost(const std::string &ts_cmd)
-{
-	int result = E_OK;
-	try
-	{
-		boost::network::http::client::request ts_request;
-		boost::network::http::client::response ts_response;
-		ts_request.uri(ts_cmd);
-		ts_response = ts_boost_http_client_.get(ts_request);
-		if (200 == ts_response.status())
-		{
-			try
-			{
-				std::string ts_data = ts_response.body();
-				int data_size = _push_ts_data_to_queue(ts_data);
-				//vvlog_i("send ts cmd:" << ts_cmd\
-					<< " size:" << ts_data.length()\
-					<< "pid:" << std::this_thread::get_id());
-				ts_data.clear();
-			}
-			catch (std::exception e)
-			{
-				std::cout << "std alloc faile" << e.what() << std::endl;
-			}
-		}
-		else
-		{
-			vvlog_e("send ts fail cmd:" << ts_cmd\
-				<< "code:" << ts_response.status()\
-				<< "msg:" << ts_response.status_message());
-			return E_DATA_EMPTY;
-		}
-	}
-	catch (std::exception e)
-	{
-		std::cout << "error:" << e.what() << std::endl;
-	}
 	return result;
 }
 
@@ -527,163 +459,6 @@ int StreamReceiver::_do_m3u8_task()
 	return 0;
 }
 
-int StreamReceiver::_do_m3u8_task_boost()
-{
-	vvlog_i("doing m3u8 task cmd:" << play_stream_ << "pid" << std::this_thread::get_id());
-	boost::asio::steady_timer wait_timer(*io_svt_);
-	boost::network::http::client::request m3u8_request;
-	boost::network::http::client::response m3u8_response;
-	while (1)
-	{
-		if (b_exit_m3u8_task_)
-		{
-			break;
-		}
-		if (0 < play_stream_.length())
-		{
-			m3u8_request.uri(play_stream_);
-			if (0 < play_stream_duration_)
-			{
-				wait_timer.expires_from_now(std::chrono::seconds(play_stream_duration_));
-			}
-			bool is_success = false;
-			try
-			{
-				m3u8_response = m3u8_boost_http_client_.get(m3u8_request);
-				m3u8_content_ = m3u8_response.body();
-				if (m3u8_response.status() == 200)
-					is_success = true;
-			}
-			catch (std::exception e)
-			{
-				std::cout << e.what() << std::endl;
-			}
-			if (is_success)
-			{
-				M3u8Parser parser(play_stream_, m3u8_content_);
-				if (parser.is_variant_play_list())//多个视频流
-				{
-					PlayListList* play_lists = nullptr;
-					if (parser.get_play_list(play_lists) && play_lists)
-					{
-						//int play_stream_index = 0;
-						for (auto play_list : *play_lists)
-						{
-							bool is_same = false;
-							for (auto item : play_stream_list_)
-							{
-								if (item.second.compare(play_list.uri) == 0)//播放列表中已经存在
-								{
-									is_same = true;
-									break;
-								}
-							}
-							if (!is_same)
-							{
-								play_stream_list_.insert(std::make_pair(play_stream_count_, play_list.uri));
-								play_stream_count_++;
-							}
-						}
-					}
-				}
-				else
-				{
-					play_stream_duration_ = (int)parser.get_max_duration();
-					//play_stream_duration_ = 0;
-					M3U8SegmentList *segment_list = nullptr;
-					if (parser.get_segments(segment_list) && segment_list)
-					{
-						for (auto segment : *segment_list)
-						{
-							//if (play_stream_duration_ < segment.duration)
-							//{
-							//	play_stream_duration_ = segment.duration;
-							//}
-							_push_ts_cmd_to_queue(segment.uri);
-							//将当前2分钟之前的task从map中删除掉
-							_remove_ts_cmd(M3U8TASKREMOVEINTERVAL);
-						}
-					}
-				}
-				m3u8_content_.clear();
-			}
-			if (0 > play_stream_duration_)
-			{
-				std::this_thread::sleep_for(std::chrono::seconds(5));
-			}
-			else
-			{
-				wait_timer.wait();
-			}
-			if (0 < play_stream_count_ && 0 < play_stream_list_.size())
-			{
-				play_stream_ = play_stream_list_.at(play_stream_count_-1);
-			}
-		}
-	}
-	return 0;
-}
-
-//int StreamReceiver::_do_m3u8_task_group(const string & play_stream, const long int play_duration)
-//{
-//	auto self = shared_from_this();
-//	if (0 < play_stream_list_.size())
-//	{
-//		for (auto play_stream : play_stream_list_)
-//		{
-//			auto task_thread = std::make_shared<std::thread>(std::bind([&]() 
-//			{
-//				int play_duration = 0;
-//				std::string m3u8_content;
-//				auto http_client = std::make_shared<HttpCurlClient>();
-//				//TSTaskType ts_task_queue(1000);
-//				std::shared_ptr<TSTaskType> ts_queue_ptr = std::make_shared<TSTaskType>(1000);
-//				ts_task_group_.insert(std::make_pair(play_stream.first, ts_queue_ptr));
-//				std::map<std::string, std::string> all_ts_task;
-//				http_client->subscribe_data([&](char* data, const long &data_len, const bool &is_finished)->void 
-//				{
-//					m3u8_content.append(data, data_len);
-//					if (is_finished)
-//					{
-//						m3u8_content.append(data, data_len);
-//						M3u8Parser parser(play_stream.second, m3u8_content);
-//						if (!parser.is_variant_play_list())//单个视频流
-//						{
-//							play_duration = parser.get_max_duration();
-//							M3U8SegmentList *segment_list = nullptr;
-//							if (parser.get_segments(segment_list) && segment_list)
-//							{
-//								for (auto segment : *segment_list)
-//								{
-//									std::string ts_cmd_str = segment.uri;
-//									HTTPTSCMD ts_cmd;
-//									memcpy(ts_cmd.cmd, ts_cmd_str.data(), segment.uri.length());
-//									ts_cmd.cmd_length = ts_cmd_str.length();
-//									std::map<string, string>::iterator iter = all_ts_task.find(ts_cmd_str);
-//									if (iter == all_ts_task.end())//此任务没有添加过
-//									{
-//										boost::posix_time::ptime now = boost::posix_time::second_clock::local_time();
-//										std::string cur_time = boost::posix_time::to_iso_string(now);
-//										all_ts_task.insert(std::make_pair(ts_cmd_str, cur_time));
-//										ts_queue_ptr->push(ts_cmd);
-//									}
-//									//将当前10分钟之前的task从map中删除掉
-//								}
-//							}
-//						}
-//						m3u8_content.clear();
-//					}
-//				});
-//				while (1)
-//				{
-//					http_client->get(play_stream.second);
-//					std::this_thread::sleep_for(std::chrono::seconds(play_duration));
-//				}
-//			}));
-//		}
-//	}
-//	return 0;
-//}
 
 int StreamReceiver::_do_ts_task()
 {
@@ -720,45 +495,6 @@ int StreamReceiver::_do_ts_task()
         std::this_thread::sleep_for(std::chrono::nanoseconds(1));
     }
 	return E_OK;
-}
-
-int StreamReceiver::_do_ts_task_boost()
-{
-	std::cout << "one ts task pid:" << std::this_thread::get_id() << std::endl;
-    while (1) 
-	{
-		if (b_exit_ts_task_)
-		{
-			break;
-		}
-
-		ts_task_list_.consume_all([&](HTTPTSCMD ts_cmd)
-		{
-			if (b_exit_ts_task_)
-			{
-				return;
-			}
-			vvlog_i("send ts start cmd:" << ts_cmd.cmd << "pid:" << std::this_thread::get_id());
-			_send_ts_cmd_boost(ts_cmd.cmd);
-			vvlog_i("send ts end cmd:" << ts_cmd.cmd << "pid:" << std::this_thread::get_id());
-		});
-		//ts_task_pool_.enqueue([&]()
-		//{
-		//	ts_task_list_.consume_all([&](HTTPTSCMD ts_cmd)
-		//	{
-		//		if (b_exit_ts_task_)
-		//		{
-		//			return;
-		//		}
-		//		//vvlog_i("send ts start cmd:" << ts_cmd.cmd << "pid:" << std::this_thread::get_id());
-		//		_send_ts_cmd_boost(ts_cmd.cmd);
-		//		//vvlog_i("send ts end cmd:" << ts_cmd.cmd << "pid:" << std::this_thread::get_id());
-		//	});
-		//});
-        std::this_thread::sleep_for(std::chrono::nanoseconds(1));
-    }
-	return E_OK;
-
 }
 
 void StreamReceiver::_write_ts_file_list(const string &out_file_name, const string &ts_file_name, const int &index, const string &time)

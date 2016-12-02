@@ -1,0 +1,29 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ImportGroup Label="PropertySheets" />
+  <PropertyGroup Label="UserMacros">
+    <root>$(Registry:HKEY_LOCAL_MACHINE\Software\vistek\dev@sdk_root)</root>
+    <vot_logger_home>$(root)votlogger\</vot_logger_home>
+    <vot_logger_include>$(vot_logger_home)include</vot_logger_include>
+    <vot_logger_lib>$(vot_logger_home)lib</vot_logger_lib>
+  </PropertyGroup>
+  <PropertyGroup>
+    <IncludePath>$(vot_logger_include);$(IncludePath)</IncludePath>
+    <LibraryPath>$(vot_logger_lib);$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
+  <ItemDefinitionGroup />
+  <ItemGroup>
+    <BuildMacro Include="root">
+      <Value>$(root)</Value>
+    </BuildMacro>
+    <BuildMacro Include="vot_logger_home">
+      <Value>$(vot_logger_home)</Value>
+    </BuildMacro>
+    <BuildMacro Include="vot_logger_include">
+      <Value>$(vot_logger_include)</Value>
+    </BuildMacro>
+    <BuildMacro Include="vot_logger_lib">
+      <Value>$(vot_logger_lib)</Value>
+    </BuildMacro>
+  </ItemGroup>
+</Project>
