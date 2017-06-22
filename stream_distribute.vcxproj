@@ -177,6 +177,7 @@ xcopy /cvYi $(vot_logger_lib)\*.dll $(OutDir)</Command>
     <Text Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="incl\base_receiver.h" />
     <ClInclude Include="incl\data_types_defs.h" />
     <ClInclude Include="incl\demux.h" />
     <ClInclude Include="incl\dvb.h" />
@@ -210,6 +211,8 @@ xcopy /cvYi $(vot_logger_lib)\*.dll $(OutDir)</Command>
     <ClInclude Include="incl\test_udp_client.h" />
     <ClInclude Include="incl\thread_pool.h" />
     <ClInclude Include="incl\tspacket.h" />
+    <ClInclude Include="incl\ts_file_stream_receiver.h" />
+    <ClInclude Include="incl\ts_test_receiver.h" />
     <ClInclude Include="incl\udpclient.h" />
     <ClInclude Include="incl\udp_socket_session.h" />
     <ClInclude Include="incl\uri_parser.h" />
@@ -218,6 +221,7 @@ xcopy /cvYi $(vot_logger_lib)\*.dll $(OutDir)</Command>
     <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="src\base_receiver.cpp" />
     <ClCompile Include="src\http_curl_client.cpp" />
     <ClCompile Include="src\m3u8parser.cpp" />
     <ClCompile Include="src\pat_pmt.cpp">
@@ -247,6 +251,8 @@ xcopy /cvYi $(vot_logger_lib)\*.dll $(OutDir)</Command>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">NotUsing</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="src\ts_file_stream_receiver.cpp" />
+    <ClCompile Include="src\ts_test_receiver.cpp" />
     <ClCompile Include="src\udpclient.cpp" />
     <ClCompile Include="src\udp_socket_session.cpp" />
     <ClCompile Include="src\uri_parser.cpp" />
