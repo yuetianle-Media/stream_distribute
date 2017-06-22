@@ -1,5 +1,5 @@
 #include "stdafx.h"
-#include "m3u8parser.h"
+#include "M3u8Parser.h"
 
 M3u8Parser::M3u8Parser(const std::string uri, const std::string &content)
 	:m3u8_content_(content), uri_(uri)
