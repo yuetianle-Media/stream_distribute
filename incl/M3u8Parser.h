@@ -10,7 +10,7 @@
 #include "pre_boost_basic.h"
 #include "pre_regex.h"
 
-#include "m3u8define.h"
+#include "M3u8Define.h"
 #include "errcode.h"
 //warning not thread safe.
 
