@@ -93,7 +93,7 @@ int HttpCurlClient::get(const std::string &url, const int &timeout_ms /*= 5000/*
 			curl_easy_getinfo(session_, CURLINFO_TOTAL_TIME, &total_time);
 			if (response_code != 200)
 			{
-				return -1;
+				return response_code;
 			}
 			else
 			{
@@ -175,6 +175,7 @@ int HttpCurlClient::_set_base_option()
 			return result;
 		}
 		result = curl_easy_setopt(session_, CURLOPT_WRITEDATA, this);
+		curl_easy_setopt(session_, CURLOPT_FORBID_REUSE, 0L);
 	}
 	return result;
 }

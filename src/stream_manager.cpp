@@ -15,9 +15,17 @@ StreamManager::~StreamManager()
 
 bool StreamManager::start()
 {
+	if (rules_manager_)
+	{
 	rules_manager_->subcribe_add_task(boost::bind(&StreamManager::_do_add_task_signal, this, _1));
 	rules_manager_->subcribe_del_task(boost::bind(&StreamManager::_do_del_task_signal, this, _1));
+		rules_manager_->start_task();
 	return true;
+	}
+	else
+	{
+		return false;
+	}
 	//if (!add_task_)
 	//{
 	//	add_task_.reset(new std::thread(std::bind(&StreamManager::_do_add_tasks_callback, this)));
@@ -68,11 +76,25 @@ void StreamManager::_do_add_task_signal(const TASKCONTENT&task_content)
 	bool add_success = false;
 	if (rules_manager_->get_local_ip(local_ip) && !local_ip.empty())
 	{
+		if (task_content.task_type == FILE_TASK)
+		{
+			add_success = _do_add_ts_task(task_content, local_ip);
+		}
+		else
+		{
 		add_success = _do_add_task(task_content, local_ip);
+		}
 	}
 	else
 	{
+		if (task_content.task_type == FILE_TASK)
+		{
+			add_success = _do_add_ts_task(task_content);
+		}
+		else
+		{
 		add_success = _do_add_task(task_content);
+		}
 	}
 	if (add_success)
 	{
@@ -256,6 +278,73 @@ bool StreamManager::_do_add_task(const TASKCONTENT &task_content, const std::str
 			{
 				stream_content.sender = sender_ptr;
 				stream_content.receiver = receiver_ptr;
+				stream_map_.insert(std::make_pair(task_content.url, stream_content));
+			}
+		}
+		else//没有转发组播IP
+		{
+			return false;
+		}
+	}
+	else
+	{
+		sender_ptr = iter->second.sender;
+		for (int index = 0; index < task_content.addr_cout; index++)
+		{
+			sender_ptr->add_sender_address(task_content.remote_addr_list[index].ip\
+				, task_content.remote_addr_list[index].port);
+			char ip_port_id[100] = { 0 };
+			sprintf(ip_port_id, "%s:%d", task_content.remote_addr_list[index].ip\
+				, task_content.remote_addr_list[index].port);
+			iter->second.multi_addr.insert(std::make_pair(ip_port_id, task_content.remote_addr_list[index]));
+		}
+	}
+	return true;
+}
+bool StreamManager::_do_add_ts_task(const TASKCONTENT &task_content, const std::string &local_addr /*= ""*/)
+{
+	TESTReceiverPtr receiver_ptr = nullptr;
+	StreamSenderPtr sender_ptr = nullptr;
+	StreamContent stream_content;
+	v_lock(lk, stream_map_mutex_);
+	if (0 >= strlen(task_content.url))
+	{
+		return false;
+	}
+	StreamMap::iterator iter = stream_map_.find(task_content.url);
+	if (iter == stream_map_.end())//没有此视频流
+	{
+		receiver_ptr = std::make_shared<TESTReceiver>(task_content.url);
+		if (0 < task_content.addr_cout)
+		{
+			if (!local_addr.empty())
+			{
+				sender_ptr = std::make_shared<StreamSender>(receiver_ptr, local_addr);
+				sender_ptr->set_local_ip(local_addr);
+			}
+			else
+			{
+				sender_ptr = std::make_shared<StreamSender>(receiver_ptr);
+			}
+			sender_ptr->set_delay_time(task_content.delay_time_ms);
+			sender_ptr->set_receive_url(task_content.url);
+			for (int index = 0; index < task_content.addr_cout; index++)
+			{
+				sender_ptr->add_sender_address(task_content.remote_addr_list[index].ip\
+					, task_content.remote_addr_list[index].port);
+				char ip_port_id[100] = { 0 };
+				sprintf(ip_port_id, "%s:%d", task_content.remote_addr_list[index].ip\
+					, task_content.remote_addr_list[index].port);
+				stream_content.multi_addr.insert(std::make_pair(ip_port_id, task_content.remote_addr_list[index]));
+			}
+			if (receiver_ptr)
+				receiver_ptr->start();
+			if (sender_ptr)
+				sender_ptr->start();
+			if (receiver_ptr && sender_ptr)
+			{
+				stream_content.sender = sender_ptr;
+				stream_content.ts_receiver = receiver_ptr;
 				stream_map_.insert(std::make_pair(task_content.url, stream_content));
 			}
 		}

@@ -12,8 +12,33 @@ StreamReceiver::StreamReceiver(const string &url)
 	, b_exit_m3u8_task_(false), b_exit_ts_task_(false), b_exit_parse_task_(false)\
 	, ts_file_index_(0), uri_(url), receive_ts_buffer_(TS_PACKET_LENGTH_STANDARD*7*400)\
 	, /*ts_send_queue_(512), ts_send_unmlimt_queue_(1024*50),*/ play_stream_count_(0)/*, ts_task_pool_(4)*/\
-	, io_svt_(std::make_shared<boost::asio::io_service>()), strand_(*io_svt_)
+	, io_svt_(std::make_shared<boost::asio::io_service>()), strand_(*io_svt_)\
+	, stream_rate_(StreamReceiver::RateSD) 
 {
+	if (StreamReceiver::RateSD == stream_rate_)
+	{
+		ts_comm_send_queue_.ts_sd_send_queue_ = std::make_shared<TSSendSpscSDQueueType>();
+	}
+	else if (StreamReceiver::RateHD == stream_rate_)
+	{
+		ts_comm_send_queue_.ts_hd_send_queue_ = std::make_shared<TSSendSpscHDQueueType>();
+	}
+	else if (StreamReceiver::RateFHD == stream_rate_)
+	{
+		ts_comm_send_queue_.ts_fhd_send_queue_ = std::make_shared<TSSendSpscFHDQueueType>();
+	}
+	else if (StreamReceiver::Rate2K == stream_rate_)
+	{
+		ts_comm_send_queue_.ts_2k_send_queue_ = std::make_shared<TSSendSpsc2KQueueType>();
+	}
+	else if (StreamReceiver::Rate4K == stream_rate_)
+	{
+		ts_comm_send_queue_.ts_4k_send_queue_ = std::make_shared<TSSendSpsc4KQueueType>();
+	}
+	else
+	{
+		ts_comm_send_queue_.ts_fhd_send_queue_ = std::make_shared<TSSendSpscFHDQueueType>();
+	}
 	worker_ = std::make_shared<boost::asio::io_service::work>(*io_svt_);
 	play_stream_ = uri_;
 	ostringstream ss_out;
@@ -130,6 +155,66 @@ void StreamReceiver::stop()
 }
 
 
+bool StreamReceiver::get_ts_send_sd_queue(TSSendSpscSDQueueTypePtr &ts_send_queue)
+{
+	if (ts_comm_send_queue_.ts_sd_send_queue_ != nullptr)
+	{
+		ts_send_queue = ts_comm_send_queue_.ts_sd_send_queue_;
+		return true;
+	}
+	else
+	{
+		return false;
+	}
+}
+bool StreamReceiver::get_ts_send_hd_queue(TSSendSpscHDQueueTypePtr &ts_send_queue)
+{
+	if (ts_comm_send_queue_.ts_hd_send_queue_ != nullptr)
+	{
+		ts_send_queue = ts_comm_send_queue_.ts_hd_send_queue_;
+		return true;
+	}
+	else
+	{
+		return false;
+	}
+}
+bool StreamReceiver::get_ts_send_fhd_queue(TSSendSpscFHDQueueTypePtr &ts_send_queue)
+{
+	if (ts_comm_send_queue_.ts_fhd_send_queue_ != nullptr)
+	{
+		ts_send_queue = ts_comm_send_queue_.ts_fhd_send_queue_;
+		return true;
+	}
+	else
+	{
+		return false;
+	}
+}
+bool StreamReceiver::get_ts_send_2k_queue(TSSendSpsc2KQueueTypePtr &ts_send_queue)
+{
+	if (ts_comm_send_queue_.ts_2k_send_queue_ != nullptr)
+	{
+		ts_send_queue = ts_comm_send_queue_.ts_2k_send_queue_;
+		return true;
+	}
+	else
+	{
+		return false;
+	}
+}
+bool StreamReceiver::get_ts_send_4k_queue(TSSendSpsc4KQueueTypePtr &ts_send_queue)
+{
+	if (ts_comm_send_queue_.ts_4k_send_queue_ != nullptr)
+	{
+		ts_send_queue = ts_comm_send_queue_.ts_4k_send_queue_;
+		return true;
+	}
+	else
+	{
+		return false;
+	}
+}
 boost::signals2::connection StreamReceiver::subcribe_ts_callback(const TsSignal::slot_type &slot)
 {
 	return ts_send_signal_.connect(slot);
@@ -201,7 +286,7 @@ int StreamReceiver::_send_m3u8_cmd(const string &m3u8_cmd)
 		result = m3u8_http_client_ptr_->get(m3u8_cmd);
 		if (E_OK != result)
 		{
-			//vvlog_e("send m3u8 cmd" << m3u8_cmd << " fail!");
+			vvlog_e("send m3u8 cmd" << m3u8_cmd << " fail!" << " error:" << result);
 			//std::cout << "send m3u8 cmd" << m3u8_cmd << " fail!" << std::endl;
 		}
 		else
@@ -743,13 +828,25 @@ void StreamReceiver::_do_parse_ts_data_ext()
 						ts_send_content.is_real_pcr = true;
 					}
 					//std::cout << "push ts" << std::endl;
-					while (1 > ts_send_queue_.write_available())
+					if (ts_comm_send_queue_.ts_sd_send_queue_)
 					{
-						std::this_thread::sleep_for(std::chrono::milliseconds(100));
+						_doing_push_ts_data_to_queue(ts_comm_send_queue_.ts_sd_send_queue_, ts_send_content);
 					}
-					if (!ts_send_queue_.push(ts_send_content))
+					else if (ts_comm_send_queue_.ts_hd_send_queue_)
 					{
-						std::cout << "push ts data faile" << std::endl;
+						_doing_push_ts_data_to_queue(ts_comm_send_queue_.ts_hd_send_queue_, ts_send_content);
+					}
+					else if (ts_comm_send_queue_.ts_fhd_send_queue_)
+					{
+						_doing_push_ts_data_to_queue(ts_comm_send_queue_.ts_fhd_send_queue_, ts_send_content);
+					}
+					else if (ts_comm_send_queue_.ts_2k_send_queue_)
+					{
+						_doing_push_ts_data_to_queue(ts_comm_send_queue_.ts_2k_send_queue_, ts_send_content);
+					}
+					else if (ts_comm_send_queue_.ts_4k_send_queue_)
+					{
+						_doing_push_ts_data_to_queue(ts_comm_send_queue_.ts_4k_send_queue_, ts_send_content);
 					}
 					//ts_send_unmlimt_queue_.push(ts_send_content);
 					ts_packet_num = 0;

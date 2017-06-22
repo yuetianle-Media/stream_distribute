@@ -40,6 +40,11 @@ public:
 	void stop();
 	//bool get_send_queue(TSSendQueueType *&send_queue) { send_queue = &ts_send_queue_; return true; }
 	bool get_send_queue(TSSendSpscQueueType *&send_queue) { send_queue = &ts_send_queue_; return true; }
+	bool get_ts_send_sd_queue(TSSendSpscSDQueueTypePtr &ts_send_queue);
+	bool get_ts_send_hd_queue(TSSendSpscHDQueueTypePtr &ts_send_queue);
+	bool get_ts_send_fhd_queue(TSSendSpscFHDQueueTypePtr &ts_send_queue);
+	bool get_ts_send_2k_queue(TSSendSpsc2KQueueTypePtr &ts_send_queue);
+	bool get_ts_send_4k_queue(TSSendSpsc4KQueueTypePtr &ts_send_queue);
 	//bool get_unlimit_queue(TSSendUnlimitQueueType *&unlimit_queue) { unlimit_queue = &ts_send_unmlimt_queue_; return true; }
 public:
     /**
@@ -90,6 +95,8 @@ private:
 
 	void _do_parse_ts_data();
 
+	template <typename T>
+	void _doing_push_ts_data_to_queue(T &data_queue, TSSENDCONTENT &ts_content);
 	void _do_parse_ts_data_ext();
 
 	void _push_ts_data_to_send_queue(char *data, const long int &data_len, const int &need_time/*bytes:(188*7):micro*/);
@@ -147,7 +154,29 @@ private:
 	std::once_flag ts_data_flag_;
 	std::string cur_date_;
 	std::string unique_str_;
+	enum StreamRate
+	{
+		RateSD = 0,
+		RateHD = 1,
+		RateFHD = 2,
+		Rate2K = 3,
+		Rate4K = 4
+	};
+	int stream_rate_;
+	ts_comm_send_queue ts_comm_send_queue_;
 };
 
+template <typename T>
+void StreamReceiver::_doing_push_ts_data_to_queue(T &data_queue, TSSENDCONTENT &ts_content)
+{
+	while (1 > data_queue->write_available())
+	{
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	}
+	if (!data_queue->push(ts_content))
+	{
+		std::cout << "push ts data faile" << std::endl;
+	}
+}
 typedef std::shared_ptr<StreamReceiver> StreamReceiverPtr;
 #endif

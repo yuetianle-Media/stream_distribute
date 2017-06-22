@@ -39,6 +39,27 @@ StreamSender::StreamSender(StreamReceiverPtr receiver, const std::string &local_
 #endif
 }
 
+StreamSender::StreamSender(TESTReceiverPtr receiver, const string &local_ip/*="127.0.0.1"*/)
+	 :udp_sender_ptr(nullptr)\
+	, is_ts_task_exit_(false), out_ts_file_(nullptr)\
+	, send_delay_time_(0), ts_stream_receiver_(receiver)\
+	, local_ip_(local_ip)
+{
+    out_file_name_.append(boost::posix_time::to_iso_string(boost::posix_time::second_clock::local_time())).append(".ts");
+	if (local_ip_.empty())
+	{
+		udp_sender_ptr = std::make_shared<UDPClient>(0, 5000);
+	}
+	else
+	{
+		udp_sender_ptr = std::make_shared<UDPClient>(0, 5000,local_ip_);
+	}
+	udp_sender_ptr->resize_send_buffer_size(1024 * 1024 * 1.25);
+	udp_sender_ptr->set_noblock(true);
+#if ENABLE_OUTFILE
+	out_ts_file_ = fopen(out_file_name_.data(), "ab");
+#endif
+}
 StreamSender::~StreamSender()
 {
 	std::cout << "come sender destruct!" << std::endl;
@@ -256,11 +277,67 @@ void StreamSender::_do_send_task()
 {
 	TSSendUnlimitQueueType *ts_data_queue = nullptr;
 	TSSendSpscQueueType *ts_spsc_data_queue = nullptr;
+	ts_comm_send_queue ts_comm_data_queue;
 	if (stream_receiver_)
 	{
 		//stream_receiver_->get_unlimit_queue(ts_data_queue);
 		stream_receiver_->get_send_queue(ts_spsc_data_queue);
+		TSSendSpscSDQueueTypePtr sd_send_queue		=nullptr;
+		TSSendSpscHDQueueTypePtr hd_send_queue	    = nullptr;
+		TSSendSpscFHDQueueTypePtr fhd_send_queue	= nullptr;
+		TSSendSpsc2KQueueTypePtr ts_2k_send_queue	= nullptr;
+		TSSendSpsc4KQueueTypePtr ts_4k_send_queue	= nullptr;
+		if (stream_receiver_->get_ts_send_sd_queue(sd_send_queue))
+		{
+			_doing_send_task(sd_send_queue);
+		}
+		else if (stream_receiver_->get_ts_send_hd_queue(hd_send_queue))
+		{
+			_doing_send_task(hd_send_queue);
+		}
+		else if (stream_receiver_->get_ts_send_fhd_queue(fhd_send_queue))
+		{
+			_doing_send_task(fhd_send_queue);
+		}
+		else if (stream_receiver_->get_ts_send_2k_queue(ts_2k_send_queue))
+		{
+			_doing_send_task(ts_2k_send_queue);
+		}
+		else if (stream_receiver_->get_ts_send_4k_queue(ts_4k_send_queue))
+		{
+			_doing_send_task(ts_4k_send_queue);
+		}
 	}
+	if (ts_stream_receiver_)
+	{
+		ts_stream_receiver_->get_send_queue(ts_spsc_data_queue);
+		TSSendSpscSDQueueTypePtr sd_send_queue		=nullptr;
+		TSSendSpscHDQueueTypePtr hd_send_queue	    = nullptr;
+		TSSendSpscFHDQueueTypePtr fhd_send_queue	= nullptr;
+		TSSendSpsc2KQueueTypePtr ts_2k_send_queue	= nullptr;
+		TSSendSpsc4KQueueTypePtr ts_4k_send_queue	= nullptr;
+		if (ts_stream_receiver_->get_ts_send_sd_queue(sd_send_queue))
+		{
+			_doing_send_task(sd_send_queue);
+		}
+		else if (ts_stream_receiver_->get_ts_send_hd_queue(hd_send_queue))
+		{
+			_doing_send_task(hd_send_queue);
+		}
+		else if (ts_stream_receiver_->get_ts_send_fhd_queue(fhd_send_queue))
+		{
+			_doing_send_task(fhd_send_queue);
+		}
+		else if (ts_stream_receiver_->get_ts_send_2k_queue(ts_2k_send_queue))
+		{
+			_doing_send_task(ts_2k_send_queue);
+		}
+		else if (ts_stream_receiver_->get_ts_send_4k_queue(ts_4k_send_queue))
+		{
+			_doing_send_task(ts_4k_send_queue);
+		}
+	}
+	return;
 	bool is_first_send = false;
 	TS_SEND_CONTENT ts_send_content;
 	int64_t success_time = 0;

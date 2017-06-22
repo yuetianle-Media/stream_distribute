@@ -9,7 +9,7 @@ RuleManager::RuleManager(const string &config_file)
 	, del_task_list_(1024)
 	, task_interval_(5)
 {
-	_start_task(task_interval_);
+	//_start_task(task_interval_);
 }
 
 RuleManager::~RuleManager()
@@ -52,6 +52,7 @@ int RuleManager::_load_config_file(const string &config_file, RULECONTENTTYPE &c
 		for (pugi::xml_node_iterator it = rules_node.begin(); it != rules_node.end(); it++)
 		{
 			string url = it->attribute((char*)(RuleManager::URL_ATTR_NAME)).as_string();
+			int task_type = it->attribute((char*)(RuleManager::TASK_TYPE_ATTR_NAME)).as_int();
 			pugi::xml_attribute delay_time_attr =  it->attribute((char*)(RuleManager::URL_ATTR_DELAY_TIME));
 			int delay_time = 0;
 			if (delay_time_attr)
@@ -73,6 +74,7 @@ int RuleManager::_load_config_file(const string &config_file, RULECONTENTTYPE &c
 				memcpy(rule_content.remote_addr.ip, ip.data(), ip.length());
 				rule_content.delay_time_ms = delay_time;
 				rule_content.remote_addr.port = port;
+				rule_content.task_type = (TaskType)task_type;
 				cur_rules_content.insert(std::make_pair(stream_id_str, rule_content));
 			}
 		}
@@ -103,6 +105,7 @@ int RuleManager::_get_add_task(TASKCONTENTLIST &add_task_list, RULECONTENTTYPE &
 				memcpy(task.remote_addr_list[0].ip, item.second.remote_addr.ip, sizeof(item.second.remote_addr.ip));
 				task.remote_addr_list[0].port = item.second.remote_addr.port;
 				task.delay_time_ms = item.second.delay_time_ms;
+				task.task_type = item.second.task_type;
 				//task_content_index.insert(std::make_pair(item.second.url, 1));
 				task.addr_cout++;
 				task_map.insert(std::make_pair(item.second.url, task));
@@ -276,6 +279,19 @@ bool RuleManager::get_local_ip(std::string &local_ip)
 	}
 }
 
+void RuleManager::start_task(const int interveral/*=5*/)
+{
+	if (task_)
+	{
+		cout << "task is running thread id:" << task_->get_id() << std::endl;
+		return;
+	}
+	task_.reset(new thread(std::bind(&RuleManager::_do_task_ext, this)));
+	if (task_)
+	{
+		vvlog_i("start process config file:" << config_file_name_ << " pid:" << std::this_thread::get_id());
+	}
+}
 void RuleManager::_start_task(const int interveral/*=5*/)
 {
 	if (task_)

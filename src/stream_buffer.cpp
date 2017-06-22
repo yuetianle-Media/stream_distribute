@@ -29,15 +29,25 @@ int StreamBuffer::pushToBuffer(const char *content, const int &size)
 bool StreamBuffer::pop_data(char *dest, const int &dest_len, const int &data_len)
 {
 	v_lock(lk, mtx_data_);
+	int need_move_len = 0;
 	while (data_size_ >= 188*3)
 	{
 		if (data_content_[0] == 0x47 && data_content_[188] == 0x47 && data_content_[188 * 2] == 0x47)
 		{
 			break;
 		}
-		memmove(data_content_, data_content_+1, data_size_ - 1);
+		//memmove(data_content_, data_content_+1, data_size_ - 1);
+		need_move_len++;
 		data_size_ -= 1;
 		current_index_ -= 1;
+	}
+	if (0 < need_move_len && need_move_len < data_size_)
+	{
+		memmove(data_content_, data_content_ + need_move_len, data_size_ - need_move_len);
+	}
+	if (need_move_len == data_size_)
+	{
+		memset(data_content_, 0, sizeof(data_content_));
 	}
 	if (data_content_[0] != 0x47)
 	{

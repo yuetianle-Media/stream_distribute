@@ -2,6 +2,7 @@
 #define _STREAM_MANAGER_H_
 #pragma once
 #include "stream_receiver.h"
+#include "ts_test_receiver.h"
 #include "stream_sender.h"
 #include "rule_manager.h"
 
@@ -10,6 +11,7 @@ typedef std::map<std::string, StreamSenderPtr>	 SenderMap;/*<< url:sender*/
 typedef struct MStreamContent
 {
 	StreamReceiverPtr receiver;
+	TESTReceiverPtr ts_receiver;
 	StreamSenderPtr sender;
 	std::map<std::string, IPPORT> multi_addr;
 	MStreamContent()
@@ -37,6 +39,7 @@ private:
 	void _do_del_tasks_callback();
 
 	bool _do_add_task(const TASKCONTENT &task_content, const std::string &local_addr = "");
+	bool _do_add_ts_task(const TASKCONTENT &task_content, const std::string &local_addr = "");
 	bool _do_remove_task(const TASKCONTENT &task_content);
 
 	std::shared_ptr<std::thread> add_task_;

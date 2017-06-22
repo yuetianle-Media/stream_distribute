@@ -21,6 +21,11 @@ struct IPPORT
 		memset(ip, 0, sizeof(IPPORT));
 	}
 };
+enum TaskType
+{
+	URL_TASK = 0,
+	FILE_TASK = 1
+};
 
 #define MAX_DISTRIBUTE 10
 struct TASKCONTENT
@@ -28,6 +33,7 @@ struct TASKCONTENT
 	char url[256];
 	IPPORT remote_addr_list[MAX_DISTRIBUTE];
 	int addr_cout;
+	TaskType task_type;
 	int delay_time_ms;
 	TASKCONTENT()
 		:addr_cout(0), delay_time_ms(0)
@@ -49,6 +55,7 @@ typedef struct MRULECONTENT
 	char url[256];
 	IPPORT remote_addr;
 	int delay_time_ms;
+	TaskType task_type;
 	MRULECONTENT()
 		:delay_time_ms(0)
 	{
@@ -62,6 +69,7 @@ class RuleManager :public std::enable_shared_from_this<RuleManager>
 {
 	const char *URL_ATTR_NAME = "url";
 	const char *IP_ATTR_NAME = "ip";
+	const char *TASK_TYPE_ATTR_NAME = "task_type";
 	const char *PORT_ATTR_NAME = "port";
 	const char *URL_ATTR_DELAY_TIME = "delay_time";
 public:
@@ -79,6 +87,7 @@ public:
 	bool get_del_task(TASKCONTENT &task_content);
 
 	bool get_local_ip(std::string &local_ip);
+	void start_task(const int interveral=5);
 protected:
 	/**
 	 * @brief start_task start task to load file with a time interveral.
