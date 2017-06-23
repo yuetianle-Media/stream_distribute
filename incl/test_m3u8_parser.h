@@ -1,6 +1,6 @@
 #pragma once
 #include "playlist.h"
-#include "m3u8Parser.h"
+#include "M3u8Parser.h"
 inline void test_m3u8_content_parser()
 {
 	std::string src_uri_;
