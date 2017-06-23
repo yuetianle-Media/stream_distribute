@@ -20,7 +20,7 @@
 
 #include "tcpclient.h"
 #include "uri_parser.h"
-#include "m3u8Parser.h"
+#include "M3u8Parser.h"
 #include "http_curl_client.h"
 #include "thread_pool.h"
 using namespace pugi;
