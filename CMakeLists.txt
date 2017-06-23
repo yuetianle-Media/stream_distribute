@@ -85,7 +85,7 @@ set(EXECUTEABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/output/bin)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 #cpack setting
-include(CPackConfig)
+#include(CPackConfig)
 #第三方库安装
 #install program
 install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION bin/ LIBRARY DESTINATION lib/)
